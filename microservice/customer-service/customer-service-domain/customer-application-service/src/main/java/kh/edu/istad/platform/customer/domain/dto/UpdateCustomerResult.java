@@ -2,7 +2,7 @@ package kh.edu.istad.platform.customer.domain.dto;
 
 import java.util.UUID;
 
-public record InitiateCustomerResult(
+public record UpdateCustomerResult(
         UUID customerId,
         String username,
         String familyName,

@@ -3,7 +3,6 @@ package kh.edu.istad.platform.customer.domain.dto;
 import java.util.UUID;
 
 public record InitiateCustomerCommand(
-        UUID customerId,
         String username,
         String familyName,
         String givenName,
