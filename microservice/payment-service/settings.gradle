@@ -15,7 +15,7 @@ rootProject.name = 'payment-service'
 
 include'payment-service-main'
 include 'payment-service-domain:payment-domain-core'
-include 'payment-service-domain:-application-service'
+include 'payment-service-domain:payment-application-service'
 include 'payment-service-restapi'
 include 'payment-service-persistence'
 include 'payment-service-message'
