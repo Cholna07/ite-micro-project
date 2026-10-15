@@ -1,9 +1,11 @@
-plugins{
+plugins {
     id 'spring-boot-common-conventions'
 }
-dependencies {
 
+dependencies {
     implementation 'kh.edu.istad:order-domain-core'
+    implementation project(':order-service-restapi')
+    implementation project(':order-service-persistence')
 
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
 }
