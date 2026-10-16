@@ -1,0 +1,18 @@
+plugins {
+    id 'spring-common-conventions'
+}
+
+dependencies {
+    // Access Business entity and value objects
+    implementation project(':business-service-domain:business-domain-core')
+
+    // Access BusinessRepository interface in application-service
+    implementation project(':business-service-domain:business-application-service')
+
+    // Reactive MongoDB
+    implementation 'org.springframework.boot:spring-boot-starter-data-mongodb-reactive'
+
+    // Lombok
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+}

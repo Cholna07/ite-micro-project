@@ -1,9 +1,12 @@
-plugins{
+plugins {
     id 'spring-boot-common-conventions'
 }
+
 dependencies {
-
-    implementation 'kh.edu.istad:payment-domain-core'
-
+    implementation project(':payment-service-domain:payment-domain-core')
+    implementation project(':payment-service-restapi')
+    implementation project(':payment-service-persistence')
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    runtimeOnly 'org.postgresql:postgresql'
 }
