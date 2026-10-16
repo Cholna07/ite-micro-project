@@ -2,11 +2,11 @@ package kh.edu.istad.platform.order.domain.valueobject;
 
 import java.util.UUID;
 
-public record RestaurantId(UUID value) {
-    public RestaurantId {
+public record BusinessId(UUID value) {
+    public BusinessId {
         if (value == null) {
             throw new IllegalArgumentException(
-                    "Restaurant ID cannot be null"
+                    "Business ID cannot be null"
             );
         }
     }

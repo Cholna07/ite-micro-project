@@ -25,7 +25,7 @@ public class OrderEntity {
 
     private UUID customerId;
 
-    private UUID restaurantId;
+    private UUID businessId;
 
     private String street;
 
@@ -47,7 +47,7 @@ public class OrderEntity {
     public OrderEntity(
             UUID orderId,
             UUID customerId,
-            UUID restaurantId,
+            UUID businessId,
             String street,
             String postalCode,
             String city,
@@ -55,7 +55,7 @@ public class OrderEntity {
     ) {
         this.orderId = orderId;
         this.customerId = customerId;
-        this.restaurantId = restaurantId;
+        this.businessId = businessId;
         this.street = street;
         this.postalCode = postalCode;
         this.city = city;

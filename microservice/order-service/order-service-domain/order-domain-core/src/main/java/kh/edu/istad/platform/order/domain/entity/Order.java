@@ -1,11 +1,12 @@
 package kh.edu.istad.platform.order.domain.entity;
 
+import kh.edu.istad.platform.order.domain.entity.OrderItem;
 import kh.edu.istad.platform.order.domain.exception.OrderDomainException;
+import kh.edu.istad.platform.order.domain.valueobject.BusinessId;
 import kh.edu.istad.platform.order.domain.valueobject.CustomerId;
 import kh.edu.istad.platform.order.domain.valueobject.Money;
 import kh.edu.istad.platform.order.domain.valueobject.OrderId;
 import kh.edu.istad.platform.order.domain.valueobject.OrderStatus;
-import kh.edu.istad.platform.order.domain.valueobject.RestaurantId;
 import kh.edu.istad.platform.order.domain.valueobject.StreetAddress;
 import kh.edu.istad.platform.order.domain.valueobject.TrackingId;
 
@@ -18,7 +19,7 @@ public class Order {
 
     private final OrderId id;
     private final CustomerId customerId;
-    private final RestaurantId restaurantId;
+    private final BusinessId businessId;
     private final StreetAddress deliveryAddress;
     private final List<OrderItem> items;
 
@@ -28,13 +29,13 @@ public class Order {
     public Order(
             OrderId id,
             CustomerId customerId,
-            RestaurantId restaurantId,
+            BusinessId businessId,
             StreetAddress deliveryAddress,
             List<OrderItem> items
     ) {
-        if (id == null || customerId == null || restaurantId == null) {
+        if (id == null || customerId == null || businessId == null) {
             throw new OrderDomainException(
-                    "Order ID, customer ID, and restaurant ID are required"
+                    "Order ID, customer ID, and business ID are required"
             );
         }
 
@@ -52,7 +53,7 @@ public class Order {
 
         this.id = id;
         this.customerId = customerId;
-        this.restaurantId = restaurantId;
+        this.businessId = businessId;
         this.deliveryAddress = deliveryAddress;
         this.items = new ArrayList<>(items);
         this.status = OrderStatus.PENDING;
@@ -143,8 +144,8 @@ public class Order {
         return customerId;
     }
 
-    public RestaurantId getRestaurantId() {
-        return restaurantId;
+    public BusinessId getBusinessId() {
+        return businessId;
     }
 
     public StreetAddress getDeliveryAddress() {

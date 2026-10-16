@@ -1,7 +1,10 @@
 package kh.edu.istad.platform.order.persistence.adapter;
 
-import kh.edu.istad.platform.order.domain.dto.CreateOrderResult;
+import kh.edu.istad.platform.order.domain.entity.Order;
+import kh.edu.istad.platform.order.domain.entity.OrderItem;
+import kh.edu.istad.platform.order.domain.exception.OrderDomainException;
 import kh.edu.istad.platform.order.domain.port.out.OrderRepository;
+import kh.edu.istad.platform.order.domain.valueobject.*;
 import kh.edu.istad.platform.order.persistence.entity.OrderEntity;
 import kh.edu.istad.platform.order.persistence.entity.OrderItemEntity;
 import kh.edu.istad.platform.order.persistence.repository.OrderJpaRepository;
@@ -9,6 +12,7 @@ import kh.edu.istad.platform.order.persistence.repository.OrderJpaRepository;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -16,75 +20,67 @@ import java.util.UUID;
 public class OrderRepositoryAdapter implements OrderRepository {
 
     private final OrderJpaRepository orderJpaRepository;
+
     public OrderRepositoryAdapter(OrderJpaRepository orderJpaRepository) {
         this.orderJpaRepository = orderJpaRepository;
     }
 
     @Override
     @Transactional
-    public CreateOrderResult save(CreateOrderResult order) {
+    public Order save(Order order) {
+
         OrderEntity entity = new OrderEntity(
-                order.orderId(),
-                order.customerId(),
-                order.restaurantId(),
-                order.street(),
-                order.postalCode(),
-                order.city(),
-                order.totalPrice()
+                order.getId().value(),
+                order.getCustomerId().value(),
+                order.getBusinessId().value(),
+                order.getDeliveryAddress().street(),
+                order.getDeliveryAddress().postalCode(),
+                order.getDeliveryAddress().city(),
+                order.getTotalPrice().amount()
         );
 
-        for (CreateOrderResult.OrderItemResult item : order.items()) {
+        for (OrderItem item : order.getItems()) {
             entity.addItem(new OrderItemEntity(
-                    UUID.randomUUID(),
-                    item.productId(),
-                    item.productName(),
-                    item.quantity(),
-                    item.unitPrice(),
+                    item.getId().value(),
+                    item.getProductId(),
+                    item.getProductName(),
+                    item.getQuantity(),
+                    item.getUnitPrice().amount(),
                     null
             ));
         }
 
         OrderEntity saved = orderJpaRepository.save(entity);
 
-        return new CreateOrderResult(
-                saved.getOrderId(),
-                saved.getCustomerId(),
-                saved.getRestaurantId(),
-                saved.getStreet(),
-                saved.getPostalCode(),
-                saved.getCity(),
-                order.items(),
-                saved.getTotalPrice()
-        );
+        return order;
     }
 
     @Override
     @Transactional(readOnly = true)
-    public Optional<CreateOrderResult> findById(UUID orderId) {
+    public Optional<Order> findById(UUID orderId) {
         return orderJpaRepository.findById(orderId)
-                .map(entity -> new CreateOrderResult(
-                        entity.getOrderId(),
-                        entity.getCustomerId(),
-                        entity.getRestaurantId(),
-                        entity.getStreet(),
-                        entity.getPostalCode(),
-                        entity.getCity(),
-                        entity.getItems().stream()
-                                .map(item ->
-                                        new CreateOrderResult.OrderItemResult(
-                                                item.getProductId(),
-                                                item.getProductName(),
-                                                item.getQuantity(),
-                                                item.getUnitPrice(),
-                                                item.getUnitPrice().multiply(
-                                                        java.math.BigDecimal.valueOf(
-                                                                item.getQuantity()
-                                                        )
-                                                )
-                                        )
-                                )
-                                .toList(),
-                        entity.getTotalPrice()
-                ));
+                .map(entity -> {
+                    List<OrderItem> items = entity.getItems().stream()
+                            .map(item -> new OrderItem(
+                                    new OrderItemId(item.getOrderItemId()),
+                                    item.getProductId(),
+                                    item.getProductName(),
+                                    item.getQuantity(),
+                                    new Money(item.getUnitPrice())
+                            ))
+                            .toList();
+
+                    return new Order(
+                            new OrderId(entity.getOrderId()),
+                            new CustomerId(entity.getCustomerId()),
+                            new BusinessId(entity.getBusinessId()),
+                            new StreetAddress(
+                                    entity.getStreet(),
+                                    entity.getPostalCode(),
+                                    entity.getCity()
+                            ),
+                            items
+                    );
+                });
     }
 }

@@ -6,7 +6,7 @@ import java.util.UUID;
 
 public record CreateOrderRequest(
         UUID customerId,
-        UUID restaurantId,
+        UUID businessId,
         String street,
         String postalCode,
         String city,
