@@ -23,12 +23,9 @@ public class BusinessController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public Mono<BusinessResponse> createBusiness(
-            @Valid @RequestBody CreateBusinessRequest request
-    ) {
+            @Valid @RequestBody CreateBusinessRequest request) {
         return registerBusinessUseCase
-                .registerBusiness(
-                        BusinessRestMapper.toCommand(request)
-                )
+                .registerBusiness(BusinessRestMapper.toCommand(request))
                 .map(BusinessRestMapper::toResponse);
     }
 }

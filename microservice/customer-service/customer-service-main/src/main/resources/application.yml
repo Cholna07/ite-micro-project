@@ -1,23 +1,28 @@
-#server:
-#  port: 9090
-#
-#spring:
-#  mongodb:
-#    host: localhost
-#    port: 2026
-#    username: mongod
-#    password: mongod
 server:
-    port: 9090
+  port: 9090
 
 spring:
-    datasource:
-        url: jdbc:postgresql://localhost:5432/customer_db
-        username: postgres
-        password: "1234"
-        driver-class-name: org.postgresql.Driver
+  mongodb:
+    host: localhost
+    port: 2026
+    username: mongod
+    password: mongod
+    authentication-database: admin
+    database: db_customer
 
-    jpa:
-        hibernate:
-            ddl-auto: update
-        show-sql: true
+
+
+#server:
+#    port: 9090
+#
+#spring:
+#    datasource:
+#        url: jdbc:postgresql://localhost:5432/customer_db
+#        username: postgres
+#        password: "1234"
+#        driver-class-name: org.postgresql.Driver
+#
+#    jpa:
+#        hibernate:
+#            ddl-auto: update
+#        show-sql: true

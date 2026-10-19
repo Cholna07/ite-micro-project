@@ -13,8 +13,6 @@ import reactor.core.publisher.Mono;
 @Component
 public class BusinessRepositoryAdapter implements BusinessRepository {
 
-
-
     private final BusinessMongoRepository mongoRepository;
 
     public BusinessRepositoryAdapter(
