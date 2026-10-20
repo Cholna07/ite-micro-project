@@ -15,7 +15,7 @@ import java.time.Instant;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
-@Document(collection = "customers")
+@Document(collection = "customerDocument")
 public class CustomerDocument implements Persistable<String> {
     @Id
     private String id;
@@ -39,6 +39,6 @@ public class CustomerDocument implements Persistable<String> {
 
     @Override
     public boolean isNew() {
-        return createdAt == null;
+        return true;
     }
 }

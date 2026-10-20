@@ -10,7 +10,7 @@ import org.springframework.data.mongodb.core.convert.MongoCustomConversions;
 import org.springframework.data.mongodb.repository.config.EnableReactiveMongoRepositories;
 
 @Configuration
-@EnableReactiveMongoAuditing(auditorAwareRef = "auditorAwareConfig")
+@EnableReactiveMongoAuditing(auditorAwareRef = "auditorAwareConfig",modifyOnCreate = false)
 public class MongoConfig {
     @Bean
     public MongoCustomConversions mongoCustomConversions() {

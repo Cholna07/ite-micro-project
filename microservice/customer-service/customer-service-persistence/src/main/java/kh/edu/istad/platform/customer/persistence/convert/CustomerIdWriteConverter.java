@@ -9,6 +9,6 @@ import org.springframework.data.convert.WritingConverter;
 public class CustomerIdWriteConverter implements Converter<CustomerId, String> {
     @Override
     public String convert(CustomerId source) {
-        return source.id().toString();
+        return source.value().toString();
     }
 }
