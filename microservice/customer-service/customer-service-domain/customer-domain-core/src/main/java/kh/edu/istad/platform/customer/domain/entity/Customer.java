@@ -1,10 +1,10 @@
-package kh.edu.istad.platform.customer.domain.entity;
 
+package kh.edu.istad.platform.customer.domain.entity;
 
 import kh.edu.istad.common.domain.entity.AggregateRoot;
 import kh.edu.istad.common.domain.valueobject.CustomerId;
-import kh.edu.istad.common.domain.valueobject.Money;
 import kh.edu.istad.platform.customer.domain.exception.CustomerDomainException;
+import kh.edu.istad.platform.customer.domain.valueobject.CustomerSegmentId;
 import kh.edu.istad.platform.customer.domain.valueobject.CustomerStatus;
 import kh.edu.istad.platform.customer.domain.valueobject.Email;
 import kh.edu.istad.platform.customer.domain.valueobject.PhoneNumber;
@@ -12,12 +12,14 @@ import kh.edu.istad.platform.customer.domain.valueobject.PhoneNumber;
 import java.util.UUID;
 
 public class Customer extends AggregateRoot<CustomerId> {
+
      private final String username;
      private String familyName;
      private String givenName;
      private final Email email;
      private final PhoneNumber phoneNumber;
      private CustomerStatus status;
+     private CustomerSegmentId segmentId;
 
      // Domain Critical Logic
      public void initiateCustomer() {
@@ -37,20 +39,26 @@ public class Customer extends AggregateRoot<CustomerId> {
 
      public void updateCustomer(String familyName, String givenName) {
           if (familyName == null || givenName == null) {
-               throw new CustomerDomainException("familyName and givenName must not be null");
+               throw new CustomerDomainException(
+                       "familyName and givenName must not be null"
+               );
           }
+
           this.familyName = familyName;
           this.givenName = givenName;
      }
 
      public void deactivateCustomer() {
           if (status != CustomerStatus.ACTIVE) {
-               throw new CustomerDomainException("Could not deactivate because customer status is not active");
+               throw new CustomerDomainException(
+                       "Could not deactivate because customer status is not active"
+               );
           }
+
           status = CustomerStatus.INACTIVE;
      }
 
-
+     // Getters
      public String getUsername() {
           return username;
      }
@@ -75,6 +83,11 @@ public class Customer extends AggregateRoot<CustomerId> {
           return status;
      }
 
+     public CustomerSegmentId getSegmentId() {
+          return segmentId;
+     }
+
+     // Constructor
      private Customer(Builder builder) {
           super.setId(builder.id);
           username = builder.username;
@@ -83,14 +96,16 @@ public class Customer extends AggregateRoot<CustomerId> {
           email = builder.email;
           phoneNumber = builder.phoneNumber;
           status = builder.status;
+          segmentId = builder.segmentId;
      }
 
      public static Builder builder() {
           return new Builder();
      }
 
-
+     // Builder
      public static final class Builder {
+
           private CustomerId id;
           private String username;
           private String familyName;
@@ -98,6 +113,7 @@ public class Customer extends AggregateRoot<CustomerId> {
           private Email email;
           private PhoneNumber phoneNumber;
           private CustomerStatus status;
+          private CustomerSegmentId segmentId;
 
           private Builder() {
           }
@@ -134,6 +150,11 @@ public class Customer extends AggregateRoot<CustomerId> {
 
           public Builder status(CustomerStatus val) {
                status = val;
+               return this;
+          }
+
+          public Builder segmentId(CustomerSegmentId val) {
+               segmentId = val;
                return this;
           }
 

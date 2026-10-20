@@ -50,6 +50,16 @@ public class UpdateCustomerUseCase {
                         updatedCustomer.getEmail().value(),
                         updatedCustomer.getPhoneNumber().value(),
                         updatedCustomer.getStatus().name()
-                ));
+                ))
+                .doOnSuccess(result ->
+                        log.info("Customer updated successfully: {}", customerId)
+                )
+                .doOnError(error ->
+                        log.error(
+                                "Failed to update customer: {}",
+                                customerId,
+                                error
+                        )
+                );
     }
 }

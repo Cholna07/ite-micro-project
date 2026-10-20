@@ -9,6 +9,7 @@ public record CustomerCreateResponse (
         String givenName,
         String email,
         String phoneNumber,
-        String status
+        String status,
+        UUID segmentId
 ){
 }

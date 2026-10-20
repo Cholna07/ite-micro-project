@@ -1,16 +1,10 @@
-
 package kh.edu.istad.platform.customer.restapi.controller;
 
 import kh.edu.istad.common.domain.valueobject.CustomerId;
-import kh.edu.istad.platform.customer.domain.dto.DeactivateCustomerCommand;
-import kh.edu.istad.platform.customer.domain.dto.DeactivateCustomerResult;
-import kh.edu.istad.platform.customer.domain.dto.UpdateCustomerCommand;
-import kh.edu.istad.platform.customer.domain.dto.UpdateCustomerResult;
+import kh.edu.istad.platform.customer.domain.dto.*;
 import kh.edu.istad.platform.customer.domain.entity.Customer;
 import kh.edu.istad.platform.customer.domain.port.out.CustomerRepository;
-import kh.edu.istad.platform.customer.domain.usecase.CreateCustomerUseCase;
-import kh.edu.istad.platform.customer.domain.usecase.DeactivateCustomerUseCase;
-import kh.edu.istad.platform.customer.domain.usecase.UpdateCustomerUseCase;
+import kh.edu.istad.platform.customer.domain.usecase.*;
 import kh.edu.istad.platform.customer.restapi.dto.CustomerCreateRequest;
 import kh.edu.istad.platform.customer.restapi.dto.CustomerCreateResponse;
 import kh.edu.istad.platform.customer.restapi.mapper.CustomerWebMapper;
@@ -33,7 +27,8 @@ public class CustomerController {
     private final CustomerWebMapper customerWebMapper;
     private final UpdateCustomerUseCase updateCustomerUseCase;
     private final DeactivateCustomerUseCase deactivateCustomerUseCase;
-
+    private final SearchCustomersUseCase searchCustomersUseCase;
+    private final GetCustomerStatisticsUseCase getCustomerStatisticsUseCase;
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -43,16 +38,39 @@ public class CustomerController {
                 .create(customerWebMapper.toCommand(request))
                 .map(customerWebMapper::toCreateResponse);
     }
+
+    @GetMapping("/statistics")
+    public Flux<CustomerStatistics> getStatistics() {
+        return getCustomerStatisticsUseCase.execute();
+    }
+
     @GetMapping
-    public Flux<Customer> getAllCustomers() {
-        return customerRepository.findAll();
+    public Flux<Customer> searchCustomers(
+            @RequestParam(name = "username", required = false) String username,
+            @RequestParam(name = "familyName", required = false) String familyName,
+            @RequestParam(name = "givenName", required = false) String givenName,
+            @RequestParam(name = "email", required = false) String email,
+            @RequestParam(name = "status", required = false) String status,
+            @RequestParam(name = "segmentId", required = false) UUID segmentId,
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "10") int size
+    ) {
+        CustomerFilter filter = new CustomerFilter(
+                username,
+                familyName,
+                givenName,
+                email,
+                status,
+                segmentId
+        );
+
+        return searchCustomersUseCase.execute(filter, page, size);
     }
 
     @GetMapping("/{customerId}")
     public Mono<Customer> getCustomerById(
             @PathVariable("customerId") UUID customerId) {
-        return customerRepository.findById(
-                new CustomerId(customerId));
+        return customerRepository.findById(new CustomerId(customerId));
     }
 
     @PutMapping("/{customerId}")
@@ -82,5 +100,4 @@ public class CustomerController {
                                 "Customer not found: " + customerId)))
                 .then(customerRepository.deleteById(id));
     }
-
 }

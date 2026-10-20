@@ -1,3 +1,4 @@
+
 server:
   port: 9090
 
@@ -9,7 +10,7 @@ spring:
     password: mongod
     authentication-database: admin
     database: db_customer
-
+    uuid-representation: standard
 
 
 
