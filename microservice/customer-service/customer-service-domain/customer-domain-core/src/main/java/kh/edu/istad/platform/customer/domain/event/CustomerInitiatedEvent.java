@@ -23,3 +23,4 @@ public class CustomerInitiatedEvent implements DomainEvent<Customer> {
         return initiatedAt;
     }
 }
+

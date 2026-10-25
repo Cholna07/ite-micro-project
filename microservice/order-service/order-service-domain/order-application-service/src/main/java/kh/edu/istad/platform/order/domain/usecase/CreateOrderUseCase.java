@@ -1,3 +1,4 @@
+
 package kh.edu.istad.platform.order.domain.usecase;
 
 import kh.edu.istad.platform.order.domain.dto.CreateOrderCommand;
@@ -45,18 +46,20 @@ public class CreateOrderUseCase {
                 ))
                 .toList();
 
-        // Create the Order domain entity
-        Order order = new Order(
-                new OrderId(UUID.randomUUID()),
-                new CustomerId(command.customerId()),
-                new BusinessId(command.businessId()),
-                new StreetAddress(
-                        command.street(),
-                        command.postalCode(),
-                        command.city()
-                ),
-                orderItems
-        );
+        // Create the Order domain entity using the builder
+        Order order = Order.builder()
+                .id(new OrderId(UUID.randomUUID()))
+                .customerId(new CustomerId(command.customerId()))
+                .businessId(new BusinessId(command.businessId()))
+                .deliveryAddress(
+                        new StreetAddress(
+                                command.street(),
+                                command.postalCode(),
+                                command.city()
+                        )
+                )
+                .items(orderItems)
+                .build();
 
         // Save the order
         Order savedOrder = orderRepository.save(order);

@@ -1,8 +1,8 @@
+
 package kh.edu.istad.platform.order.persistence.adapter;
 
 import kh.edu.istad.platform.order.domain.entity.Order;
 import kh.edu.istad.platform.order.domain.entity.OrderItem;
-import kh.edu.istad.platform.order.domain.exception.OrderDomainException;
 import kh.edu.istad.platform.order.domain.port.out.OrderRepository;
 import kh.edu.istad.platform.order.domain.valueobject.*;
 import kh.edu.istad.platform.order.persistence.entity.OrderEntity;
@@ -50,7 +50,7 @@ public class OrderRepositoryAdapter implements OrderRepository {
             ));
         }
 
-        OrderEntity saved = orderJpaRepository.save(entity);
+        orderJpaRepository.save(entity);
 
         return order;
     }
@@ -58,8 +58,10 @@ public class OrderRepositoryAdapter implements OrderRepository {
     @Override
     @Transactional(readOnly = true)
     public Optional<Order> findById(UUID orderId) {
+
         return orderJpaRepository.findById(orderId)
                 .map(entity -> {
+
                     List<OrderItem> items = entity.getItems().stream()
                             .map(item -> new OrderItem(
                                     new OrderItemId(item.getOrderItemId()),
@@ -70,17 +72,19 @@ public class OrderRepositoryAdapter implements OrderRepository {
                             ))
                             .toList();
 
-                    return new Order(
-                            new OrderId(entity.getOrderId()),
-                            new CustomerId(entity.getCustomerId()),
-                            new BusinessId(entity.getBusinessId()),
-                            new StreetAddress(
-                                    entity.getStreet(),
-                                    entity.getPostalCode(),
-                                    entity.getCity()
-                            ),
-                            items
-                    );
+                    return Order.builder()
+                            .id(new OrderId(entity.getOrderId()))
+                            .customerId(new CustomerId(entity.getCustomerId()))
+                            .businessId(new BusinessId(entity.getBusinessId()))
+                            .deliveryAddress(
+                                    new StreetAddress(
+                                            entity.getStreet(),
+                                            entity.getPostalCode(),
+                                            entity.getCity()
+                                    )
+                            )
+                            .items(items)
+                            .build();
                 });
     }
 }

@@ -6,7 +6,13 @@ import kh.edu.istad.platform.order.domain.valueobject.OrderItemId;
 
 import java.util.UUID;
 
-public class OrderItem {
+import kh.edu.istad.common.domain.entity.BaseEntity;
+import kh.edu.istad.common.domain.valueobject.OrderId;
+import kh.edu.istad.platform.order.domain.valueobject.OrderItemId;
+
+public class OrderItem  extends BaseEntity<OrderItemId> {
+    private OrderId orderId;
+    private Product product;
     private final OrderItemId id;
     private final UUID productId;
     private final String productName;
