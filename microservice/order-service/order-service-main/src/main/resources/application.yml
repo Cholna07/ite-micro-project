@@ -1,3 +1,4 @@
+
 spring:
   application:
     name: order-service
@@ -16,9 +17,20 @@ server:
   port: 9092
 
 eureka:
-  instance:
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+    service-url:
+      defaultZone: http://localhost:8999/eureka/
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+  server:
     lease-renewal-interval-in-seconds: 10
     lease-expiration-duration-in-seconds: 30
-  client:
-    service-url:
-      defaultZone: http://localhost:9090/eureka/

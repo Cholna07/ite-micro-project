@@ -7,6 +7,6 @@ dependencies {
     implementation 'kh.edu.istad:business-application-service'
     implementation 'kh.edu.istad:business-service-persistence'
     implementation 'kh.edu.istad:business-service-restapi'
-
+    implementation 'org.springframework.cloud:spring-cloud-starter-netflix-eureka-client'
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
 }

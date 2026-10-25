@@ -14,3 +14,9 @@ spring:
 
 server:
   port: 8084
+eureka:
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+    service-url:
+      defaultZone: http://localhost:8999/eureka/

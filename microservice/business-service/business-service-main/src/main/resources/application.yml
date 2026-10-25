@@ -8,3 +8,10 @@ spring:
   data:
     mongodb:
       uri: mongodb://mongod:mongod@localhost:2026/business_db?authSource=admin
+
+eureka:
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+    service-url:
+      defaultZone: http://localhost:8999/eureka/

@@ -14,10 +14,10 @@ spring:
     uuid-representation: standard
 eureka:
   client:
-    register-with-eureka: false
-    fetch-registry: false
+    register-with-eureka: true
+    fetch-registry: true
     service-url:
-      defaultZone: http://localhost:9090/eureka/
+      defaultZone: http://localhost:8999/eureka/
 
 #server:
 #    port: 9090
