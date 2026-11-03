@@ -1,5 +1,19 @@
-
 spring:
+  security:
+    oauth2:
+      client:
+        registration:
+          customer-client:
+            provider: auth-server
+            client-id: order-service
+            client-secret: order-secret
+            authorization-grant-type: client_credentials
+            scope:
+              - client.read
+
+        provider:
+          auth-server:
+            token-uri: http://localhost:9090/oauth2/token
   http:
     serviceclient:
       customer:

@@ -1,43 +1,32 @@
-#server:
-#  port: 9090
-#
-#spring:
-#  mongodb:
-#    host: localhost
-#    port: 2026
-#    username: mongod
-#    password: mongod
-#
-#
-##  datasource:
-##    url: jdbc:postgresql://localhost:5432/customer_db
-##    username: postgres
-##    password: 1234
-##    driver-class-name: org.postgresql.Driver
-##
-##  jpa:
-##    hibernate:
-##      ddl-auto: update
-##    show-sql: true
-
-
 server:
   port: 9091
 
 spring:
+  main:
+    web-application-type: reactive
   application:
     name: customer-service
+
   datasource:
     url: jdbc:postgresql://localhost:5432/customer_db
     username: postgres
     password: 1234
     driver-class-name: org.postgresql.Driver
+
   jpa:
     hibernate:
       ddl-auto: update
+
   profiles:
     active:
       - dev
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:9090
+
   cloud:
     gateway:
       server:
@@ -46,6 +35,7 @@ spring:
             locator:
               enabled: true
               lower-case-service-id: true
+
     consul:
       discovery:
         health-check-url: http://host.docker.internal:${server.port}/actuator/health
