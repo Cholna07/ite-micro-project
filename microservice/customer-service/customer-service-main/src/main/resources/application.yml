@@ -35,11 +35,23 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
+  profiles:
+    active:
+      - dev
   cloud:
+    gateway:
+      server:
+        webflux:
+          discovery:
+            locator:
+              enabled: true
+              lower-case-service-id: true
     consul:
       discovery:
-        service-name: customer-service
+        health-check-url: http://host.docker.internal:${server.port}/actuator/health
         prefer-ip-address: true
+        service-name: ${spring.application.name}
+        instance-id: ${spring.application.name}-${random.value}
 
 management:
   endpoints:
