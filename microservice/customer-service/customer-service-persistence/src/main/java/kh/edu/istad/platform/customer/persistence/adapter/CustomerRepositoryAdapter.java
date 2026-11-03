@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
 import java.util.UUID;
+import java.util.List;
 
 @Repository
 @RequiredArgsConstructor
@@ -87,5 +88,20 @@ public class CustomerRepositoryAdapter implements CustomerRepository {
                 .phoneNumber(new PhoneNumber(updatedEntity.getPhoneNumber()))
                 .status(CustomerStatus.valueOf(updatedEntity.getStatus()))
                 .build();
+    }
+
+    @Override
+    public List<Customer> findAll() {
+        return customerJpaRepository.findAll().stream()
+                .map(entity -> Customer.builder()
+                        .id(new CustomerId(entity.getCustomerId()))
+                        .username(entity.getUsername())
+                        .familyName(entity.getFamilyName())
+                        .givenName(entity.getGivenName())
+                        .email(new Email(entity.getEmail()))
+                        .phoneNumber(new PhoneNumber(entity.getPhoneNumber()))
+                        .status(CustomerStatus.valueOf(entity.getStatus()))
+                        .build())
+                .toList();
     }
 }

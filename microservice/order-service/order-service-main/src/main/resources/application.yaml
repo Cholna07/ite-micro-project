@@ -1,0 +1,48 @@
+
+spring:
+  http:
+    serviceclient:
+      customer:
+        base-url: http://customer-service
+  application:
+    name: order-service
+
+  profiles:
+    active: dev
+
+  config:
+    import: "optional:consul:"
+
+  cloud:
+    consul:
+      config:
+        format: YAML
+        watch:
+          enabled: false
+        enabled: true
+      discovery:
+        health-check-url: http://host.docker.internal:${server.port}/actuator/health
+        prefer-ip-address: true
+        service-name: order-service
+        instance-id: ${spring.application.name}-${random.value}
+
+  r2dbc:
+    url: r2dbc:postgresql://localhost:9543/db_order
+    username: iteuser
+    password: qwerqwer
+
+  datasource:
+    url: jdbc:postgresql://localhost:9543/db_order
+    username: iteuser
+    password: qwerqwer
+    driver-class-name: org.postgresql.Driver
+
+  liquibase:
+    enabled: true
+    change-log: classpath:/db/changelog/db.changelog-master.yaml
+    url: jdbc:postgresql://localhost:9543/db_order
+    user: iteuser
+    password: qwerqwer
+
+server:
+  port: 8080

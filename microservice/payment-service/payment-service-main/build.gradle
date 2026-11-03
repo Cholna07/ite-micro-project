@@ -4,6 +4,6 @@ plugins{
 dependencies {
 
     implementation 'kh.edu.istad:payment-domain-core'
-
+//    implementation 'kh.edu.istad:istad-common-swagger'
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
 }

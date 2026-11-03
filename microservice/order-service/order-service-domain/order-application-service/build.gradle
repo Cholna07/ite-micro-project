@@ -3,4 +3,6 @@ plugins{
 }
 dependencies {
     api 'kh.edu.istad:customer-domain-core'
+    implementation 'org.springframework.boot:spring-boot-starter-webflux'
+    testImplementation 'io.projectreactor:reactor-test'
 }
