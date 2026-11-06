@@ -6,24 +6,47 @@ pluginManagement {
         mavenCentral()
     }
 }
+
 dependencyResolutionManagement {
     repositories {
         mavenCentral()
     }
+
     versionCatalogs {
         libs {
-            from(
-                    files("../../gradle/libs.versions.toml")
-            )
+            from(files("../../gradle/libs.versions.toml"))
         }
     }
 }
+
 rootProject.name = 'order-service'
 
-include'order-service-main'
+include 'order-service-main'
 include 'order-service-domain:order-domain-core'
 include 'order-service-domain:order-application-service'
 include 'order-service-restapi'
 include 'order-service-persistence'
 include 'order-service-message'
 include 'order-service-client'
+
+// Connect to customer-service
+includeBuild('../customer-service') {
+    dependencySubstitution {
+        substitute module('kh.edu.istad:customer-domain-core')
+        using project(':customer-service-domain')
+    }
+}
+
+// Connect to istad-common
+includeBuild('../../istad-common') {
+    dependencySubstitution {
+        substitute module('kh.edu.istad:istad-common-domain')
+        using project(':istad-common-domain')
+
+        substitute module('kh.edu.istad:istad-common-grpc')
+        using project(':istad-common-grpc')
+
+        substitute module('kh.edu.istad:istad-common-swagger')
+        using project(':istad-common-swagger')
+    }
+}

@@ -2,6 +2,7 @@ plugins{
     id 'spring-boot-common-conventions'
 }
 dependencies {
+    implementation 'kh.edu.istad:istad-common-grpc:1.0.0'
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
     testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'

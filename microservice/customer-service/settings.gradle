@@ -11,20 +11,36 @@ dependencyResolutionManagement {
     repositories {
         mavenCentral()
     }
+
     versionCatalogs {
         libs {
-            from(
-                    files("../../gradle/libs.versions.toml")
-            )
+            from(files("../../gradle/libs.versions.toml"))
         }
     }
 }
 
 rootProject.name = 'customer-service'
 
-include'customer-service-main'
+// Customer-service modules
+include 'customer-service-domain'
 include 'customer-service-domain:customer-domain-core'
 include 'customer-service-domain:customer-application-service'
-include 'customer-service-restapi'
-include 'customer-service-persistence'
+
+include 'customer-service-main'
 include 'customer-service-message'
+include 'customer-service-persistence'
+include 'customer-service-restapi'
+
+// Connect to istad-common
+includeBuild('../../istad-common') {
+    dependencySubstitution {
+        substitute(module('kh.edu.istad:istad-common-grpc'))
+                .using(project(':istad-common-grpc'))
+
+        substitute(module('kh.edu.istad:istad-common-swagger'))
+                .using(project(':istad-common-swagger'))
+
+        substitute(module('kh.edu.istad:istad-common-domain'))
+                .using(project(':istad-common-domain'))
+    }
+}
