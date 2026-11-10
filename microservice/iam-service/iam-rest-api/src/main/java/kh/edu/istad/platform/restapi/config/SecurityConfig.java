@@ -3,12 +3,13 @@ package kh.edu.istad.platform.restapi.config;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
+import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
 @RequiredArgsConstructor
@@ -17,7 +18,9 @@ public class SecurityConfig {
     private final JwtAuthenticationConverter jwtAuthenticationConverter;
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    @Order(3)
+    public SecurityFilterChain securityFilterChain(HttpSecurity http)
+            throws Exception {
 
         http
                 .csrf(AbstractHttpConfigurer::disable)
@@ -27,6 +30,9 @@ public class SecurityConfig {
                 )
 
                 .authorizeHttpRequests(auth -> auth
+
+                        // Public homepage and error page
+                        .requestMatchers("/", "/error").permitAll()
 
                         // Public registration and login
                         .requestMatchers(
@@ -41,8 +47,8 @@ public class SecurityConfig {
                                 "/connect/register"
                         ).permitAll()
 
-                        // DCR POST: requires authentication.
-                        // Controller additionally checks the client.create scope.
+                        // DCR POST: requires authentication
+                        // Controller additionally checks the client.create scope
                         .requestMatchers(
                                 HttpMethod.POST,
                                 "/connect/register"

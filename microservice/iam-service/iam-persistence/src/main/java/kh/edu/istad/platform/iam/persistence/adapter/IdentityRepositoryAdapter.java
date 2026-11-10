@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -26,21 +27,6 @@ public class IdentityRepositoryAdapter implements IdentityRepository {
     @Transactional(readOnly = true)
     public Optional<Identity> findByUuid(UUID uuid) {
         return identityJpaRepository.findByUuid(uuid)
-                .map(identityPersistenceMapper::toDomain);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public Optional<Identity> findByProviderAndProviderSubject(
-            String provider,
-            String providerSubject
-    ) {
-        IdentityProvider identityProvider = IdentityProvider.valueOf(
-                provider.trim().toUpperCase()
-        );
-
-        return identityJpaRepository
-                .findByProviderAndProviderSubject(String.valueOf(identityProvider), providerSubject)
                 .map(identityPersistenceMapper::toDomain);
     }
 
@@ -88,7 +74,8 @@ public class IdentityRepositoryAdapter implements IdentityRepository {
             entity.setDeletedBy(updatedEntity.getDeletedBy());
         }
 
-        IdentityJpaEntity savedEntity = identityJpaRepository.save(entity);
+        IdentityJpaEntity savedEntity =
+                identityJpaRepository.save(entity);
 
         return identityPersistenceMapper.toDomain(savedEntity);
     }
@@ -100,12 +87,26 @@ public class IdentityRepositoryAdapter implements IdentityRepository {
             String providerSubject
     ) {
         IdentityProvider identityProvider = IdentityProvider.valueOf(
-                provider.trim().toUpperCase()
+                provider.trim().toUpperCase(Locale.ROOT)
         );
 
         return identityJpaRepository.existsByProviderAndProviderSubject(
-                String.valueOf(identityProvider),
+                identityProvider,
                 providerSubject
         );
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<Identity> findByProviderAndProviderSubject(
+            IdentityProvider provider,
+            String providerSubject
+    ) {
+        return identityJpaRepository
+                .findByProviderAndProviderSubject(
+                        provider,
+                        providerSubject
+                )
+                .map(identityPersistenceMapper::toDomain);
     }
 }

@@ -1,5 +1,7 @@
 package kh.edu.istad.platform.iam.domain.port.out;
+
 import kh.edu.istad.platform.iam.domain.entity.Identity;
+import kh.edu.istad.platform.iam.domain.valueobject.IdentityProvider;
 
 import java.util.List;
 import java.util.Optional;
@@ -10,7 +12,7 @@ public interface IdentityRepository {
     Optional<Identity> findByUuid(UUID uuid);
 
     Optional<Identity> findByProviderAndProviderSubject(
-            String provider,
+            IdentityProvider provider,
             String providerSubject
     );
 

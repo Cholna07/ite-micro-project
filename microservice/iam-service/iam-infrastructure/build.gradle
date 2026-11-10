@@ -3,7 +3,9 @@ plugins {
 }
 
 dependencies {
-    implementation 'kh.edu.istad:iam-application-service'
+    implementation project(':iam-domain:iam-application-service')
+    implementation project(':iam-domain:iam-domain-core')
+
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
     implementation 'org.springframework.boot:spring-boot-starter-security-oauth2-authorization-server'

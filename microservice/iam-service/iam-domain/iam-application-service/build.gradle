@@ -2,5 +2,5 @@ plugins{
     id 'spring-common-conventions'
 }
 dependencies {
-    api 'kh.edu.istad:iam-domain-core'
+    implementation project(':iam-domain:iam-domain-core')
 }

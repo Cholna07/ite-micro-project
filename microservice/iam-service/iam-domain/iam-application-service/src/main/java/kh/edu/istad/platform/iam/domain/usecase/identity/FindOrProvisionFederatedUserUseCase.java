@@ -75,10 +75,9 @@ public class FindOrProvisionFederatedUserUseCase {
         String providerSubject = command.providerSubject().trim();
         String email = command.email().trim().toLowerCase();
 
-        // 1. Check whether this federated identity already exists.
         Identity existingIdentity = identityRepository
                 .findByProviderAndProviderSubject(
-                        provider.name(),
+                        IdentityProvider.valueOf(String.valueOf(provider)),
                         providerSubject
                 )
                 .orElse(null);
