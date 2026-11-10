@@ -1,17 +1,15 @@
-
 package kh.edu.istad.platform.iam.infrastructure.config;
 
 import kh.edu.istad.platform.iam.infrastructure.oauth2.OAuth2AuthorizationConfig;
 import kh.edu.istad.platform.iam.infrastructure.oauth2.OAuth2ConsentConfig;
 import kh.edu.istad.platform.iam.infrastructure.oauth2.OidcInfoService;
 import kh.edu.istad.platform.iam.infrastructure.oauth2.RegisteredClientConfig;
-
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.MediaType;
-import org.springframework.security.config.Customizer;
+import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.oauth2.server.authorization.OAuth2AuthorizationServerConfigurer;
 import org.springframework.security.web.SecurityFilterChain;
@@ -27,9 +25,14 @@ import org.springframework.security.web.util.matcher.MediaTypeRequestMatcher;
 public class AuthorizationServerConfig {
 
     private final OidcInfoService oidcInfoService;
+    private final AuthenticationProvider authenticationProvider;
 
-    public AuthorizationServerConfig(OidcInfoService oidcInfoService) {
+    public AuthorizationServerConfig(
+            OidcInfoService oidcInfoService,
+            AuthenticationProvider authenticationProvider
+    ) {
         this.oidcInfoService = oidcInfoService;
+        this.authenticationProvider = authenticationProvider;
     }
 
     @Bean
@@ -51,9 +54,11 @@ public class AuthorizationServerConfig {
                                         )
                                 )
                 )
+                .authenticationProvider(authenticationProvider)
                 .authorizeHttpRequests(authorize ->
                         authorize.anyRequest().authenticated()
                 )
+                .formLogin(form -> form.permitAll())
                 .exceptionHandling(exceptions ->
                         exceptions.defaultAuthenticationEntryPointFor(
                                 new LoginUrlAuthenticationEntryPoint("/login"),

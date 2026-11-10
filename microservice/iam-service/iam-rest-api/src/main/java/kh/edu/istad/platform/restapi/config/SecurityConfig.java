@@ -8,6 +8,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
 
 @Configuration
 @RequiredArgsConstructor
@@ -55,6 +56,17 @@ public class SecurityConfig {
                 )
 
                 .oauth2ResourceServer(oauth2 -> oauth2
+                        .bearerTokenResolver(request -> {
+
+                            // Registration GET uses an opaque registration access token,
+                            // not a JWT.
+                            if ("GET".equals(request.getMethod())
+                                    && "/connect/register".equals(request.getServletPath())) {
+                                return null;
+                            }
+
+                            return new DefaultBearerTokenResolver().resolve(request);
+                        })
                         .jwt(jwt -> jwt
                                 .jwtAuthenticationConverter(jwtAuthenticationConverter)
                         )

@@ -1,10 +1,12 @@
+
 package kh.edu.istad.platform.iam.infrastructure.config;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.crypto.factory.PasswordEncoderFactories;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.DelegatingPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
@@ -14,6 +16,7 @@ import org.springframework.security.oauth2.server.authorization.settings.ClientS
 import org.springframework.security.oauth2.server.authorization.settings.TokenSettings;
 
 import java.time.Duration;
+import java.util.Map;
 import java.util.UUID;
 
 @Configuration
@@ -21,7 +24,18 @@ public class InfrastructureConfig {
 
     @Bean
     public PasswordEncoder passwordEncoder() {
-        return PasswordEncoderFactories.createDelegatingPasswordEncoder();
+        BCryptPasswordEncoder bcrypt = new BCryptPasswordEncoder();
+
+        DelegatingPasswordEncoder delegating =
+                new DelegatingPasswordEncoder(
+                        "bcrypt",
+                        Map.of("bcrypt", bcrypt)
+                );
+
+        // Support existing BCrypt hashes without the {bcrypt} prefix.
+        delegating.setDefaultPasswordEncoderForMatches(bcrypt);
+
+        return delegating;
     }
 
     @Bean
@@ -33,7 +47,24 @@ public class InfrastructureConfig {
     ) {
         return args -> {
 
-            if (repository.findByClientId(clientId) != null) {
+            // Avoid creating the same registration client twice.
+            RegisteredClient existingClient =
+                    repository.findByClientId(clientId);
+
+            if (existingClient != null) {
+                boolean secretMatches = passwordEncoder.matches(
+                        clientSecret,
+                        existingClient.getClientSecret()
+                );
+
+                System.out.println(
+                        "Registration client exists: " + clientId
+                );
+
+                System.out.println(
+                        "Registration client secret matches: " + secretMatches
+                );
+
                 return;
             }
 
@@ -56,9 +87,7 @@ public class InfrastructureConfig {
                             )
                             .tokenSettings(
                                     TokenSettings.builder()
-                                            .accessTokenTimeToLive(
-                                                    Duration.ofMinutes(10)
-                                            )
+                                            .accessTokenTimeToLive(Duration.ofMinutes(10))
                                             .build()
                             )
                             .build();

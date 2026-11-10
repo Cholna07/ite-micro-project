@@ -29,9 +29,7 @@ import java.util.UUID;
 public class DynamicClientRegistrationController {
 
     private final RegisteredClientRepository registeredClientRepository;
-
     private final PasswordEncoder passwordEncoder;
-
     private final SecureRandom secureRandom = new SecureRandom();
 
     public DynamicClientRegistrationController(
@@ -42,6 +40,7 @@ public class DynamicClientRegistrationController {
         this.passwordEncoder = passwordEncoder;
     }
 
+    // POST: Register a new OAuth2 client
     @PostMapping
     public ResponseEntity<RegistrationResponse> registerClient(
             Authentication authentication,
@@ -51,6 +50,7 @@ public class DynamicClientRegistrationController {
         if (authentication == null ||
                 !authentication.isAuthenticated() ||
                 !hasClientCreateAuthority(authentication)) {
+
             throw new ResponseStatusException(
                     HttpStatus.FORBIDDEN,
                     "Missing client.create authority"
@@ -77,8 +77,12 @@ public class DynamicClientRegistrationController {
                 .authorizationGrantType(
                         AuthorizationGrantType.REFRESH_TOKEN
                 )
-                .redirectUris(uris -> uris.addAll(request.redirect_uris()))
-                .scopes(scopes -> scopes.addAll(request.scope()))
+                .redirectUris(uris ->
+                        uris.addAll(request.redirect_uris())
+                )
+                .scopes(scopes ->
+                        scopes.addAll(request.scope())
+                )
                 .clientSettings(
                         ClientSettings.builder()
                                 .setting(
@@ -118,8 +122,20 @@ public class DynamicClientRegistrationController {
     @GetMapping
     public RegistrationDetails getRegisteredClient(
             @RequestParam String client_id,
-            @RequestHeader(HttpHeaders.AUTHORIZATION) String authorization
+            @RequestHeader(
+                    value = HttpHeaders.AUTHORIZATION,
+                    required = false
+            ) String authorization
     ) {
+
+        System.out.println(">>> GET /connect/register CONTROLLER REACHED");
+
+        System.out.println("Authorization header present: "
+                + (authorization != null));
+
+        System.out.println("Bearer prefix present: "
+                + (authorization != null &&
+                authorization.startsWith("Bearer ")));
 
         String registrationToken = extractBearerToken(authorization);
 
@@ -136,8 +152,14 @@ public class DynamicClientRegistrationController {
         Object storedHash = client.getClientSettings()
                 .getSetting("registration_access_token_hash");
 
-        if (!(storedHash instanceof String hash) ||
-                !passwordEncoder.matches(registrationToken, hash)) {
+        boolean tokenMatches =
+                storedHash instanceof String hash &&
+                        passwordEncoder.matches(registrationToken, hash);
+
+        System.out.println("Client found: true");
+        System.out.println("Registration token matches: " + tokenMatches);
+
+        if (!tokenMatches) {
             throw new ResponseStatusException(
                     HttpStatus.FORBIDDEN,
                     "Invalid registration access token"
@@ -162,24 +184,16 @@ public class DynamicClientRegistrationController {
                 );
     }
 
+    // Validate registration request
     private void validateRequest(RegistrationRequest request) {
 
-        if (!Set.of("authorization_code").containsAll(
-                request.grant_types()
-        ) || !request.grant_types().contains("authorization_code")) {
+        if (!Set.of("authorization_code", "refresh_token")
+                .containsAll(request.grant_types()) ||
+                !request.grant_types().contains("authorization_code")) {
+
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "Only authorization_code and refresh_token grants are supported"
-            );
-        }
-
-        if (!request.grant_types().stream()
-                .allMatch(grant ->
-                        grant.equals("authorization_code") ||
-                                grant.equals("refresh_token"))) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Unsupported grant type"
             );
         }
 
@@ -190,17 +204,19 @@ public class DynamicClientRegistrationController {
             );
         }
 
-        if (!request.token_endpoint_auth_method()
-                .equals("client_secret_basic")) {
+        if (!"client_secret_basic".equals(
+                request.token_endpoint_auth_method()
+        )) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "Unsupported token endpoint authentication method"
             );
         }
 
-        if (!Set.of("openid", "profile", "email").containsAll(
-                request.scope()
-        ) || !request.scope().contains("openid")) {
+        if (!Set.of("openid", "profile", "email")
+                .containsAll(request.scope()) ||
+                !request.scope().contains("openid")) {
+
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "Unsupported scope"
@@ -212,6 +228,7 @@ public class DynamicClientRegistrationController {
 
         if (authorization == null ||
                 !authorization.startsWith("Bearer ")) {
+
             throw new ResponseStatusException(
                     HttpStatus.UNAUTHORIZED,
                     "Registration access token is required"
@@ -222,6 +239,7 @@ public class DynamicClientRegistrationController {
     }
 
     private String generateSecret() {
+
         byte[] bytes = new byte[32];
         secureRandom.nextBytes(bytes);
 
