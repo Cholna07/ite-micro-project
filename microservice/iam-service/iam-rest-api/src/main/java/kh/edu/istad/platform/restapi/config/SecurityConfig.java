@@ -16,40 +16,47 @@ public class SecurityConfig {
     private final JwtAuthenticationConverter jwtAuthenticationConverter;
 
     @Bean
-    public SecurityFilterChain securityFilterChain(
-            HttpSecurity http
-    ) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
 
         http
                 .csrf(AbstractHttpConfigurer::disable)
 
-                .sessionManagement(session ->
-                        session.sessionCreationPolicy(
-                                SessionCreationPolicy.STATELESS
-                        )
+                .sessionManagement(session -> session
+                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
 
                 .authorizeHttpRequests(auth -> auth
 
-                        // Public registration
+                        // Public registration and login
                         .requestMatchers(
                                 HttpMethod.POST,
                                 "/api/auth/register",
                                 "/api/auth/login"
                         ).permitAll()
 
-                        // Authenticated user
+                        // DCR GET: controller validates the registration access token
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/connect/register"
+                        ).permitAll()
+
+                        // DCR POST: requires authentication.
+                        // Controller additionally checks the client.create scope.
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/connect/register"
+                        ).authenticated()
+
+                        // User profile
                         .requestMatchers("/api/me").authenticated()
 
-                        // Other endpoints require authentication
+                        // All other endpoints require authentication
                         .anyRequest().authenticated()
                 )
 
-                .oauth2ResourceServer(oauth2 ->
-                        oauth2.jwt(jwt ->
-                                jwt.jwtAuthenticationConverter(
-                                        jwtAuthenticationConverter
-                                )
+                .oauth2ResourceServer(oauth2 -> oauth2
+                        .jwt(jwt -> jwt
+                                .jwtAuthenticationConverter(jwtAuthenticationConverter)
                         )
                 );
 

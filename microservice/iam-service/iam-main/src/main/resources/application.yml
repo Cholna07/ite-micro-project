@@ -4,6 +4,12 @@ iam:
       issuer: cholna-iam
       secret: ${IAM_JWT_SECRET}
       access-token-expiration: 15m
+
+  oauth2:
+    registration:
+      client-id: ${IAM_REGISTRATION_CLIENT_ID:iam-registration-client}
+      client-secret: ${IAM_REGISTRATION_CLIENT_SECRET}
+
 spring:
   application:
     name: iam-service
@@ -20,6 +26,7 @@ spring:
   jpa:
     hibernate:
       ddl-auto: validate
+
     show-sql: true
     properties:
       hibernate:
