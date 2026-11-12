@@ -1,0 +1,9 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20261113-01-allow-nullable-user-email
+      author: cholna
+      changes:
+        - dropNotNullConstraint:
+            tableName: users
+            columnName: email
+            columnDataType: varchar(150)

@@ -1,34 +1,47 @@
+
 package kh.edu.istad.platform.iam.domain.usecase.identity;
 
 import kh.edu.istad.platform.iam.domain.dto.command.FederatedIdentityCommand;
 import kh.edu.istad.platform.iam.domain.dto.result.AuthUserResult;
 import kh.edu.istad.platform.iam.domain.entity.Identity;
+import kh.edu.istad.platform.iam.domain.entity.Role;
 import kh.edu.istad.platform.iam.domain.entity.User;
+import kh.edu.istad.platform.iam.domain.entity.UserRole;
 import kh.edu.istad.platform.iam.domain.port.out.IdentityRepository;
+import kh.edu.istad.platform.iam.domain.port.out.RoleRepository;
 import kh.edu.istad.platform.iam.domain.port.out.UserRepository;
+import kh.edu.istad.platform.iam.domain.port.out.UserRoleRepository;
 import kh.edu.istad.platform.iam.domain.usecase.user.GetUserAuthoritiesUseCase;
 import kh.edu.istad.platform.iam.domain.valueobject.Email;
 import kh.edu.istad.platform.iam.domain.valueobject.IdentityProvider;
 import kh.edu.istad.platform.iam.domain.valueobject.ProviderSubject;
 import kh.edu.istad.platform.iam.domain.valueobject.Username;
+
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 import java.util.UUID;
+
 @Component
 public class FindOrProvisionFederatedUserUseCase {
 
     private final IdentityRepository identityRepository;
     private final UserRepository userRepository;
+    private final UserRoleRepository userRoleRepository;
+    private final RoleRepository roleRepository;
     private final GetUserAuthoritiesUseCase getUserAuthoritiesUseCase;
 
     public FindOrProvisionFederatedUserUseCase(
             IdentityRepository identityRepository,
             UserRepository userRepository,
+            UserRoleRepository userRoleRepository,
+            RoleRepository roleRepository,
             GetUserAuthoritiesUseCase getUserAuthoritiesUseCase
     ) {
         this.identityRepository = identityRepository;
         this.userRepository = userRepository;
+        this.userRoleRepository = userRoleRepository;
+        this.roleRepository = roleRepository;
         this.getUserAuthoritiesUseCase = getUserAuthoritiesUseCase;
     }
 
@@ -75,14 +88,18 @@ public class FindOrProvisionFederatedUserUseCase {
         String providerSubject = command.providerSubject().trim();
         String email = command.email().trim().toLowerCase();
 
+        Instant now = Instant.now();
+
+        // 1. Check whether this federated identity already exists.
         Identity existingIdentity = identityRepository
                 .findByProviderAndProviderSubject(
-                        IdentityProvider.valueOf(String.valueOf(provider)),
+                        provider,
                         providerSubject
                 )
                 .orElse(null);
 
         User user;
+        boolean newUser = false;
 
         if (existingIdentity != null) {
 
@@ -97,32 +114,30 @@ public class FindOrProvisionFederatedUserUseCase {
                             "Associated user not found"
                     ));
 
-            if (user.isDeleted() || !user.isEnabled()) {
+            if (user.isDeleted() || !user.isEnabled()
+                    || !user.isAccountNonLocked()) {
                 throw new IllegalStateException(
                         "User account is unavailable"
                 );
             }
 
-            existingIdentity.setLastLoginAt(Instant.now());
-            existingIdentity.setUpdatedAt(Instant.now());
+            existingIdentity.setLastLoginAt(now);
+            existingIdentity.setUpdatedAt(now);
 
             identityRepository.save(existingIdentity);
 
         } else {
 
-            // 2. Check whether a local user already has this email.
+            // 2. Check whether a local user already uses this email.
             user = userRepository.findByEmail(email).orElse(null);
 
             if (user == null) {
 
-                // 3. Create a new user.
+                // 3. Create a new local user.
                 String username = command.username();
 
                 if (username == null || username.isBlank()) {
-                    username = email.substring(
-                            0,
-                            email.indexOf('@')
-                    );
+                    username = email.substring(0, email.indexOf('@'));
                 }
 
                 String baseUsername = username.trim();
@@ -134,8 +149,6 @@ public class FindOrProvisionFederatedUserUseCase {
                     username = baseUsername + suffix;
                     suffix++;
                 }
-
-                Instant now = Instant.now();
 
                 user = new User();
 
@@ -151,17 +164,28 @@ public class FindOrProvisionFederatedUserUseCase {
                 user.setCreatedAt(now);
 
                 user = userRepository.save(user);
+                newUser = true;
 
-            } else if (user.isDeleted() || !user.isEnabled()) {
+            } else {
 
-                throw new IllegalStateException(
-                        "An unavailable user account already uses this email"
-                );
+                // Never automatically link an unverified provider email
+                // to an existing local account.
+                if (!command.emailVerified()) {
+                    throw new IllegalStateException(
+                            "Email must be verified before linking "
+                                    + "a federated identity to an existing account"
+                    );
+                }
+
+                if (user.isDeleted() || !user.isEnabled()
+                        || !user.isAccountNonLocked()) {
+                    throw new IllegalStateException(
+                            "An unavailable user account already uses this email"
+                    );
+                }
             }
 
-            // 4. Link the federated identity to the user.
-            Instant now = Instant.now();
-
+            // 4. Link the federated identity to the local user.
             Identity identity = new Identity();
 
             identity.setUuid(UUID.randomUUID());
@@ -184,8 +208,41 @@ public class FindOrProvisionFederatedUserUseCase {
             identityRepository.save(identity);
         }
 
-        // 5. Load the user's authorities.
+        // 5. Assign the default USER role to newly registered users.
+
+// 5. Ensure every federated user has the default USER role.
+        Role defaultRole = roleRepository.findByName("USER")
+                .orElseThrow(() -> new IllegalStateException(
+                        "Default USER role was not found"
+                ));
+
+        if (!defaultRole.isActive() || defaultRole.isDeleted()) {
+            throw new IllegalStateException(
+                    "Default USER role is inactive or deleted"
+            );
+        }
+
+        if (!userRoleRepository.existsActiveAssignment(
+                user.getId(),
+                defaultRole.getId()
+        )) {
+
+            UserRole userRole = new UserRole();
+
+            userRole.setUserId(user.getId());
+            userRole.setRoleId(defaultRole.getId());
+            userRole.setAssignedAt(now);
+            userRole.setAssignedBy("SYSTEM");
+            userRole.setReason(
+                    "Default role assigned during federated authentication"
+            );
+
+            userRoleRepository.save(userRole);
+        }
+
+        // 6. Load the user's roles and permissions.
         var authorities = getUserAuthoritiesUseCase.execute(user.getUuid());
+
         return new AuthUserResult(
                 user.getUuid(),
                 user.getUsername().value(),

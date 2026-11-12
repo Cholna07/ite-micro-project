@@ -1,3 +1,4 @@
+
 package kh.edu.istad.platform.iam.infrastructure.social;
 
 import kh.edu.istad.platform.iam.domain.dto.command.FederatedIdentityCommand;
@@ -33,12 +34,12 @@ public class FederatedOidcUserService extends OidcUserService {
     @Override
     public OidcUser loadUser(OidcUserRequest userRequest) {
 
-        // 1. Load the original OIDC user from Google.
+        // 1. Load OIDC user information
         OidcUser oidcUser = super.loadUser(userRequest);
 
         Map<String, Object> attributes = oidcUser.getAttributes();
 
-        // 2. Extract Google account information.
+        // 2. Extract provider information
         String provider = userRequest.getClientRegistration()
                 .getRegistrationId();
 
@@ -50,19 +51,34 @@ public class FederatedOidcUserService extends OidcUserService {
                 oidcUser.getEmailVerified()
         );
 
-        String username = (String) attributes.get("preferred_username");
-
-        if (username == null || username.isBlank()) {
-            username = email != null
-                    ? email.substring(0, email.indexOf('@'))
-                    : null;
-        }
-
+        String username;
         String displayName = oidcUser.getFullName();
-
         String pictureUrl = oidcUser.getPicture();
 
-        // 3. Create the federated identity command.
+        if ("telegram".equalsIgnoreCase(provider)) {
+
+            username = (String) attributes.get("preferred_username");
+
+            if (username == null || username.isBlank()) {
+                username = "telegram_" + providerSubject;
+            }
+
+            if (displayName == null || displayName.isBlank()) {
+                displayName = username;
+            }
+
+        } else {
+
+            username = (String) attributes.get("preferred_username");
+
+            if (username == null || username.isBlank()) {
+                username = email != null && email.contains("@")
+                        ? email.substring(0, email.indexOf('@'))
+                        : provider + "_" + providerSubject;
+            }
+        }
+
+        // 3. Create federated identity command
         FederatedIdentityCommand command =
                 new FederatedIdentityCommand(
                         provider,
@@ -75,18 +91,18 @@ public class FederatedOidcUserService extends OidcUserService {
                         attributes
                 );
 
-        // 4. Find or provision the local IAM user.
+        // 4. Find or provision local IAM user
         AuthUserResult authUser =
                 findOrProvisionFederatedUserUseCase.execute(command);
 
-        // 5. Check local IAM account status.
+        // 5. Check local IAM account status
         if (!authUser.enabled() || authUser.accountLocked()) {
             throw new IllegalStateException(
                     "IAM user account is disabled or locked"
             );
         }
 
-        // 6. Combine Google authorities with local IAM authorities.
+        // 6. Combine provider and local IAM authorities
         Collection<GrantedAuthority> authorities =
                 new ArrayList<>(oidcUser.getAuthorities());
 
@@ -99,7 +115,7 @@ public class FederatedOidcUserService extends OidcUserService {
                 .map(SimpleGrantedAuthority::new)
                 .forEach(authorities::add);
 
-        // 7. Return an authenticated OIDC principal.
+        // 7. Return authenticated OIDC principal
         return new DefaultOidcUser(
                 authorities,
                 oidcUser.getIdToken(),

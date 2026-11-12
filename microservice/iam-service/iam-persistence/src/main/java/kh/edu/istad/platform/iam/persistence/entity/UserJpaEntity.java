@@ -1,3 +1,4 @@
+
 package kh.edu.istad.platform.iam.persistence.entity;
 
 import jakarta.persistence.*;
@@ -39,7 +40,7 @@ public class UserJpaEntity {
     @Column(nullable = false, unique = true, length = 100)
     private String username;
 
-    @Column(nullable = false, unique = true, length = 150)
+    @Column(nullable = true, unique = true, length = 150)
     private String email;
 
     @Column(nullable = false)

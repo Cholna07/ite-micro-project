@@ -1,4 +1,3 @@
-
 package kh.edu.istad.platform.iam.infrastructure.social;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -18,11 +17,14 @@ import org.springframework.security.web.SecurityFilterChain;
 public class SocialLoginConfig {
 
     private final FederatedOidcUserService federatedOidcUserService;
+    private final FederatedOAuth2UserService federatedOAuth2UserService;
 
     public SocialLoginConfig(
-            FederatedOidcUserService federatedOidcUserService
+            FederatedOidcUserService federatedOidcUserService,
+            FederatedOAuth2UserService federatedOAuth2UserService
     ) {
         this.federatedOidcUserService = federatedOidcUserService;
+        this.federatedOAuth2UserService = federatedOAuth2UserService;
     }
 
     @Bean
@@ -75,7 +77,7 @@ public class SocialLoginConfig {
                 String providerError = request.getParameter("error");
 
                 System.out.println(
-                        "===== FACEBOOK CALLBACK DEBUG ====="
+                        "===== SOCIAL LOGIN CALLBACK DEBUG ====="
                 );
 
                 System.out.println(
@@ -137,9 +139,12 @@ public class SocialLoginConfig {
                                         authorizationRequestRepository
                                 )
                         )
-                        .userInfoEndpoint(userInfo ->
-                                userInfo.oidcUserService(
+                        .userInfoEndpoint(userInfo -> userInfo
+                                .oidcUserService(
                                         federatedOidcUserService
+                                )
+                                .userService(
+                                        federatedOAuth2UserService
                                 )
                         )
                 );

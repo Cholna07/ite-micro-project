@@ -2,6 +2,6 @@ databaseChangeLog:
   - includeAll:
       path: ddl
       relativeToChangelogFile: true
-#  - includeAll:
-#      path: data
-#      relativeToChangelogFile: true
+  - includeAll:
+      path: data
+      relativeToChangelogFile: true
