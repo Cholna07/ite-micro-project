@@ -44,7 +44,7 @@ public class UserPermissionRepositoryAdapter implements UserPermissionRepository
         }
 
         UserPermissionJpaEntity savedEntity =
-                userPermissionJpaRepository.save(entity);
+                userPermissionJpaRepository.saveAndFlush(entity);
 
         return userPermissionPersistenceMapper.toDomain(savedEntity);
     }
@@ -56,6 +56,11 @@ public class UserPermissionRepositoryAdapter implements UserPermissionRepository
                 .stream()
                 .map(userPermissionPersistenceMapper::toDomain)
                 .toList();
+    }
+
+    @Override
+    public int revokeExpiredAssignments(Long userId, Long permissionId, Instant now, String actor) {
+        return userPermissionJpaRepository.revokeExpiredAssignments(userId, permissionId, now, actor);
     }
 
     @Override

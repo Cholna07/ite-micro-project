@@ -12,6 +12,7 @@ public record PermissionResponse(
         String action,
         String description,
         boolean enabled,
+        boolean system,
         Instant createdAt,
         Instant updatedAt
 

@@ -4,6 +4,7 @@ import kh.edu.istad.platform.iam.domain.dto.command.UpdatePermissionCommand;
 import kh.edu.istad.platform.iam.domain.dto.result.PermissionResult;
 import kh.edu.istad.platform.iam.domain.entity.Permission;
 import kh.edu.istad.platform.iam.domain.port.out.PermissionRepository;
+import kh.edu.istad.platform.iam.domain.exception.PermissionNameConflictException;
 import kh.edu.istad.platform.iam.domain.valueobject.Action;
 import kh.edu.istad.platform.iam.domain.valueobject.PermissionName;
 import kh.edu.istad.platform.iam.domain.valueobject.Resource;
@@ -53,39 +54,15 @@ public class UpdatePermissionUseCase {
             );
         }
 
-        if (command.name() == null || command.name().isBlank()) {
-            throw new IllegalArgumentException(
-                    "Permission name is required"
-            );
-        }
+        var definition = PermissionDefinitionValidator.validate(command.name(), command.resource(), command.action(), command.description());
 
-        if (command.resource() == null || command.resource().isBlank()) {
-            throw new IllegalArgumentException(
-                    "Permission resource is required"
-            );
-        }
+        boolean nameChanged = !permission.getName().value().equals(definition.name());
 
-        if (command.action() == null || command.action().isBlank()) {
-            throw new IllegalArgumentException(
-                    "Permission action is required"
-            );
-        }
+        if (nameChanged && permissionRepository.existsByName(definition.name())) throw new PermissionNameConflictException();
 
-        String name = command.name().trim().toLowerCase();
-        String resource = command.resource().trim().toLowerCase();
-        String action = command.action().trim().toLowerCase();
-
-        boolean nameChanged = !permission.getName().value().equals(name);
-
-        if (nameChanged && permissionRepository.existsByName(name)) {
-            throw new IllegalArgumentException(
-                    "Permission name already exists"
-            );
-        }
-
-        permission.setName(new PermissionName(name));
-        permission.setResource(new Resource(resource));
-        permission.setAction(new Action(action));
+        permission.setName(new PermissionName(definition.name()));
+        permission.setResource(new Resource(definition.resource()));
+        permission.setAction(new Action(definition.action()));
         permission.setDescription(command.description());
         permission.setUpdatedAt(Instant.now());
 

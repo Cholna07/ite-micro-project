@@ -2,6 +2,7 @@ package kh.edu.istad.platform.iam.persistence.repository;
 
 import kh.edu.istad.platform.iam.persistence.entity.UserRoleJpaEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -39,6 +40,23 @@ public interface UserRoleJpaRepository extends JpaRepository<UserRoleJpaEntity, 
             @Param("userId") Long userId,
             @Param("roleId") Long roleId,
             @Param("now") Instant now
+    );
+
+    @Modifying
+    @Query("""
+            UPDATE UserRoleJpaEntity ur
+            SET ur.revokedAt = :now, ur.revokedBy = :actor, ur.reason = 'EXPIRED'
+            WHERE ur.userId = :userId
+              AND ur.roleId = :roleId
+              AND ur.revokedAt IS NULL
+              AND ur.expiresAt IS NOT NULL
+              AND ur.expiresAt <= :now
+            """)
+    int revokeExpiredAssignments(
+            @Param("userId") Long userId,
+            @Param("roleId") Long roleId,
+            @Param("now") Instant now,
+            @Param("actor") String actor
     );
 
     @Query("""

@@ -3,6 +3,7 @@ package kh.edu.istad.platform.iam.domain.usecase.role;
 import kh.edu.istad.platform.iam.domain.dto.command.CreateRoleCommand;
 import kh.edu.istad.platform.iam.domain.dto.result.RoleResult;
 import kh.edu.istad.platform.iam.domain.entity.Role;
+import kh.edu.istad.platform.iam.domain.exception.RoleNameConflictException;
 import kh.edu.istad.platform.iam.domain.port.out.RoleRepository;
 import kh.edu.istad.platform.iam.domain.valueobject.RoleName;
 import org.springframework.stereotype.Component;
@@ -31,7 +32,7 @@ public class CreateRoleUseCase {
         String roleName = command.name().trim().toUpperCase();
 
         if (roleRepository.existsByName(roleName)) {
-            throw new IllegalArgumentException("Role already exists");
+            throw new RoleNameConflictException("Role name already exists");
         }
 
         Instant now = Instant.now();

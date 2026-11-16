@@ -1,15 +1,16 @@
 package kh.edu.istad.platform.restapi.dto.request;
 
 import jakarta.validation.constraints.NotEmpty;
-import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotBlank;
 
-import java.util.Set;
+import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 public record GrantPermissionsToUserRequest(
-
-        @NotEmpty
-        Set<@NotNull UUID> permissionUuids
-
+        @NotEmpty List<UUID> permissionUuids,
+        @NotBlank String effect,
+        Instant expiresAt,
+        String reason
 ) {
 }

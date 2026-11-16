@@ -43,7 +43,7 @@ public class RolePermissionRepositoryAdapter implements RolePermissionRepository
         }
 
         RolePermissionJpaEntity savedEntity =
-                rolePermissionJpaRepository.save(entity);
+                rolePermissionJpaRepository.saveAndFlush(entity);
 
         return rolePermissionPersistenceMapper.toDomain(savedEntity);
     }
@@ -55,6 +55,11 @@ public class RolePermissionRepositoryAdapter implements RolePermissionRepository
                 .stream()
                 .map(rolePermissionPersistenceMapper::toDomain)
                 .toList();
+    }
+
+    @Override
+    public int revokeExpiredAssignments(Long roleId, Long permissionId, Instant now, String actor) {
+        return rolePermissionJpaRepository.revokeExpiredAssignments(roleId, permissionId, now, actor);
     }
 
     @Override

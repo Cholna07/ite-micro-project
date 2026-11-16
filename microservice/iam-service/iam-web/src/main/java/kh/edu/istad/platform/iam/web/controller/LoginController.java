@@ -1,13 +1,11 @@
 package kh.edu.istad.platform.iam.web.controller;
 
-import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.core.env.Environment;
-import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestAttribute;
-import org.springframework.web.servlet.mvc.support.RedirectAttributes;
-import org.springframework.ui.Model;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Controller
 public class LoginController {
@@ -19,19 +17,16 @@ public class LoginController {
     }
 
     @GetMapping("/login")
-    public String login(HttpServletRequest request,
-                        @RequestAttribute(name = "_csrf", required = false) CsrfToken csrf,
-                        Model model) {
-        model.addAttribute("error", request.getParameter("error") != null);
-        model.addAttribute("logout", request.getParameter("logout") != null);
-        model.addAttribute("registered", request.getParameter("registered") != null);
-        model.addAttribute("googleAvailable", configured("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "google"));
-        model.addAttribute("githubAvailable", configured("GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET", "github"));
-        model.addAttribute("facebookAvailable", configured("FACEBOOK_CLIENT_ID", "FACEBOOK_CLIENT_SECRET", "facebook"));
-        model.addAttribute("telegramAvailable", configured("TELEGRAM_CLIENT_ID", "TELEGRAM_CLIENT_SECRET", "telegram"));
-        model.addAttribute("csrfToken", csrf == null ? "" : csrf.getToken());
-        model.addAttribute("csrfParameter", csrf == null ? "_csrf" : csrf.getParameterName());
-        return "login";
+    public String login(HttpServletResponse response) {
+        String providers = List.of(
+                        configured("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "google") ? "google" : "",
+                        configured("GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET", "github") ? "github" : "",
+                        configured("FACEBOOK_CLIENT_ID", "FACEBOOK_CLIENT_SECRET", "facebook") ? "facebook" : "",
+                        configured("TELEGRAM_CLIENT_ID", "TELEGRAM_CLIENT_SECRET", "telegram") ? "telegram" : "")
+                .stream().filter(value -> !value.isBlank()).collect(Collectors.joining(","));
+        response.setHeader("X-Northstar-OAuth-Providers", providers);
+        response.setHeader("Cache-Control", "no-store");
+        return "forward:/frontend/index.html";
     }
 
     private boolean configured(String clientIdVariable, String clientSecretVariable, String registrationId) {

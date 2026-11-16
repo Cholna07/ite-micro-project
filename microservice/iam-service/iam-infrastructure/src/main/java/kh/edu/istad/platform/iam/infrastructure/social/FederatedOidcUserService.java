@@ -4,6 +4,8 @@ package kh.edu.istad.platform.iam.infrastructure.social;
 import kh.edu.istad.platform.iam.domain.dto.command.FederatedIdentityCommand;
 import kh.edu.istad.platform.iam.domain.dto.result.AuthUserResult;
 import kh.edu.istad.platform.iam.domain.usecase.identity.FindOrProvisionFederatedUserUseCase;
+import kh.edu.istad.platform.iam.domain.usecase.identity.LinkIdentityUseCase;
+import kh.edu.istad.platform.iam.domain.port.out.UserRepository;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.client.oidc.userinfo.OidcUserService;
@@ -16,19 +18,27 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import java.util.UUID;
 
 @Service
 public class FederatedOidcUserService extends OidcUserService {
 
     private final FindOrProvisionFederatedUserUseCase
             findOrProvisionFederatedUserUseCase;
+    private final LinkIdentityUseCase linkIdentityUseCase;
+    private final UserRepository userRepository;
 
     public FederatedOidcUserService(
             FindOrProvisionFederatedUserUseCase
-                    findOrProvisionFederatedUserUseCase
+                    findOrProvisionFederatedUserUseCase,
+            LinkIdentityUseCase linkIdentityUseCase,
+            UserRepository userRepository
     ) {
         this.findOrProvisionFederatedUserUseCase =
                 findOrProvisionFederatedUserUseCase;
+        this.linkIdentityUseCase = linkIdentityUseCase;
+        this.userRepository = userRepository;
     }
 
     @Override
@@ -102,7 +112,16 @@ public class FederatedOidcUserService extends OidcUserService {
                         attributes
                 );
 
-        // 4. Find or provision local IAM user
+        UUID pendingLinkUserUuid = IdentityLinkRequestContext.pendingUserUuid();
+        if (pendingLinkUserUuid != null) {
+            linkIdentityUseCase.execute(pendingLinkUserUuid, command);
+            String localUsername = userRepository.findByUuid(pendingLinkUserUuid)
+                    .orElseThrow(() -> new IllegalStateException("Linking account is unavailable"))
+                    .getUsername().value();
+            return new IamOidcUser(oidcUser, localUsername);
+        }
+
+        // Ordinary social login continues through the existing find-or-provision flow.
         AuthUserResult authUser =
                 findOrProvisionFederatedUserUseCase.execute(command);
 

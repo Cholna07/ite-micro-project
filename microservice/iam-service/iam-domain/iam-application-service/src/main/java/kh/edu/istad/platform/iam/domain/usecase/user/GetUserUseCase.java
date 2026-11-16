@@ -43,7 +43,8 @@ public class GetUserUseCase {
                 user.isEnabled(),
                 !user.isAccountNonLocked(),
                 user.getCreatedAt(),
-                user.getUpdatedAt()
+                user.getUpdatedAt(),
+                user.getPictureUrl()
         );
     }
 }

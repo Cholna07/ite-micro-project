@@ -5,16 +5,20 @@ import kh.edu.istad.platform.iam.domain.dto.result.RoleAssignmentResult;
 import kh.edu.istad.platform.iam.domain.entity.Role;
 import kh.edu.istad.platform.iam.domain.entity.User;
 import kh.edu.istad.platform.iam.domain.entity.UserRole;
+import kh.edu.istad.platform.iam.domain.exception.RoleAlreadyAssignedException;
 import kh.edu.istad.platform.iam.domain.port.out.CurrentActorProvider;
 import kh.edu.istad.platform.iam.domain.port.out.RoleRepository;
 import kh.edu.istad.platform.iam.domain.port.out.UserRepository;
 import kh.edu.istad.platform.iam.domain.port.out.UserRoleRepository;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.HashSet;
+import java.util.Set;
 @Component
 public class AssignRolesToUserUseCase {
 
@@ -35,6 +39,7 @@ public class AssignRolesToUserUseCase {
         this.currentActorProvider = currentActorProvider;
     }
 
+    @Transactional
     public List<RoleAssignmentResult> execute(
             AssignRolesToUserCommand command
     ) {
@@ -72,7 +77,8 @@ public class AssignRolesToUserUseCase {
         Instant now = Instant.now();
         String actor = currentActorProvider.getCurrentActor();
 
-        List<RoleAssignmentResult> results = new ArrayList<>();
+        List<Role> rolesToAssign = new ArrayList<>(command.roleUuids().size());
+        Set<UUID> seenRoleUuids = new HashSet<>();
 
         for (UUID roleUuid : command.roleUuids()) {
 
@@ -80,6 +86,10 @@ public class AssignRolesToUserUseCase {
                 throw new IllegalArgumentException(
                         "Role UUID cannot be null"
                 );
+            }
+
+            if (!seenRoleUuids.add(roleUuid)) {
+                throw new RoleAlreadyAssignedException("Role appears more than once in the assignment request: " + roleUuid);
             }
 
             Role role = roleRepository.findByUuid(roleUuid)
@@ -97,10 +107,23 @@ public class AssignRolesToUserUseCase {
             if (userRoleRepository.existsActiveAssignment(
                     user.getId(), role.getId())) {
 
-                throw new IllegalArgumentException(
+                throw new RoleAlreadyAssignedException(
                         "User already has this role: " + roleUuid
                 );
             }
+
+            rolesToAssign.add(role);
+        }
+
+        // Close out expired rows before inserting replacements. The partial unique
+        // index permits only one row with revoked_at IS NULL for each user and role.
+        for (Role role : rolesToAssign) {
+            userRoleRepository.revokeExpiredAssignments(user.getId(), role.getId(), now, actor);
+        }
+
+        List<RoleAssignmentResult> results = new ArrayList<>(rolesToAssign.size());
+        for (Role role : rolesToAssign) {
+            UUID roleUuid = role.getUuid();
 
             UserRole userRole = new UserRole();
 

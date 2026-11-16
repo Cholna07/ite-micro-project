@@ -7,18 +7,16 @@ dependencies {
 
     // Application use cases
     implementation project(':iam-domain:iam-application-service')
+    implementation project(':iam-domain:iam-domain-core')
 
     // Spring MVC for web controllers
     implementation 'org.springframework.boot:spring-boot-starter-webmvc:4.1.1'
     implementation 'org.springframework.boot:spring-boot-starter-security:4.1.1'
     implementation 'org.springframework.boot:spring-boot-starter-security-oauth2-authorization-server:4.1.1'
-    implementation 'gg.jte:jte:3.2.5'
-    // JTE template engine for Spring Boot 4
-    implementation 'gg.jte:jte-spring-boot-starter-4:3.2.5'
-
     // Testing
     testImplementation platform('org.junit:junit-bom:6.0.0')
     testImplementation 'org.junit.jupiter:junit-jupiter'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test:4.1.1'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 

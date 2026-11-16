@@ -1,6 +1,8 @@
 package kh.edu.istad.platform.iam.domain.port.out;
 
 import kh.edu.istad.platform.iam.domain.entity.Role;
+import kh.edu.istad.platform.iam.domain.dto.query.RoleFilterQuery;
+import kh.edu.istad.platform.iam.domain.dto.result.PageResult;
 
 import java.util.List;
 import java.util.Optional;
@@ -14,6 +16,7 @@ public interface RoleRepository {
     Optional<Role> findByName(String name);
 
     List<Role> findAll();
+    PageResult<Role> findPage(RoleFilterQuery query);
 
     // Role creation and update
     Role save(Role role);

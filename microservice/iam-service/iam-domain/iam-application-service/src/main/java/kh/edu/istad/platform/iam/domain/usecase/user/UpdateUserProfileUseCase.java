@@ -7,24 +7,33 @@ import kh.edu.istad.platform.iam.domain.port.out.CurrentActorProvider;
 import kh.edu.istad.platform.iam.domain.port.out.UserRepository;
 import kh.edu.istad.platform.iam.domain.valueobject.Address;
 import kh.edu.istad.platform.iam.domain.valueobject.PhoneNumber;
+import kh.edu.istad.platform.iam.domain.valueobject.Email;
+import kh.edu.istad.platform.iam.domain.valueobject.Username;
+import kh.edu.istad.platform.iam.domain.entity.AccountActivityEventType;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.Objects;
 
 @Component
 public class UpdateUserProfileUseCase {
 
     private final UserRepository userRepository;
     private final CurrentActorProvider currentActorProvider;
+    private final RecordAccountActivityEventUseCase recordActivity;
 
     public UpdateUserProfileUseCase(
             UserRepository userRepository,
-            CurrentActorProvider currentActorProvider
+            CurrentActorProvider currentActorProvider,
+            RecordAccountActivityEventUseCase recordActivity
     ) {
         this.userRepository = userRepository;
         this.currentActorProvider = currentActorProvider;
+        this.recordActivity = recordActivity;
     }
 
+    @Transactional
     public UserResult execute(UpdateUserProfileCommand command) {
 
         if (command == null) {
@@ -34,6 +43,30 @@ public class UpdateUserProfileUseCase {
         User user = userRepository.findByUuid(command.userUuid())
                 .orElseThrow(() ->
                         new IllegalArgumentException("User not found: " + command.userUuid()));
+        String previousEmail = user.getEmail() == null ? null : user.getEmail().value();
+
+        if (command.username() != null) {
+            String username = command.username().trim();
+            if (username.isEmpty()) {
+                throw new IllegalArgumentException("Username cannot be empty");
+            }
+            if (!username.equals(user.getUsername().value()) && userRepository.existsByUsername(username)) {
+                throw new IllegalStateException("Username is already in use");
+            }
+            user.setUsername(new Username(username));
+        }
+
+        if (command.email() != null) {
+            String email = command.email().isBlank() ? null : command.email().trim();
+            String currentEmail = user.getEmail() == null ? null : user.getEmail().value();
+            if (!Objects.equals(email, currentEmail)) {
+                if (email != null && userRepository.existsByEmail(email)) {
+                    throw new IllegalStateException("Email is already in use");
+                }
+                user.setEmail(email == null ? null : new Email(email));
+                user.setEmailVerified(false);
+            }
+        }
 
         if (command.givenName() != null) {
             user.setGivenName(command.givenName());
@@ -97,6 +130,13 @@ public class UpdateUserProfileUseCase {
         user.setUpdatedBy(currentActorProvider.getCurrentActor());
 
         User savedUser = userRepository.save(user);
+        recordActivity.execute(savedUser.getUuid(), AccountActivityEventType.PROFILE_UPDATED,
+                "Profile information updated");
+        String updatedEmail = savedUser.getEmail() == null ? null : savedUser.getEmail().value();
+        if (!Objects.equals(previousEmail, updatedEmail)) {
+            recordActivity.execute(savedUser.getUuid(), AccountActivityEventType.EMAIL_CHANGED,
+                    "Email address changed");
+        }
 
         return new UserResult(
                 savedUser.getUuid(),
@@ -114,7 +154,8 @@ public class UpdateUserProfileUseCase {
                 savedUser.isEnabled(),
                 !savedUser.isAccountNonLocked(),
                 savedUser.getCreatedAt(),
-                savedUser.getUpdatedAt()
+                savedUser.getUpdatedAt(),
+                savedUser.getPictureUrl()
         );
     }
 

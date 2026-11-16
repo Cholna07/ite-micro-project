@@ -13,6 +13,7 @@ import kh.edu.istad.platform.iam.domain.usecase.permission.DeletePermissionUseCa
 import kh.edu.istad.platform.iam.domain.usecase.permission.GetPermissionUseCase;
 import kh.edu.istad.platform.iam.domain.usecase.permission.ListPermissionsUseCase;
 import kh.edu.istad.platform.iam.domain.usecase.permission.UpdatePermissionUseCase;
+import kh.edu.istad.platform.iam.domain.exception.PermissionNameConflictException;
 import kh.edu.istad.platform.restapi.dto.request.CreatePermissionRequest;
 import kh.edu.istad.platform.restapi.dto.request.UpdatePermissionRequest;
 import kh.edu.istad.platform.restapi.dto.response.PageMetadata;
@@ -21,6 +22,8 @@ import kh.edu.istad.platform.restapi.dto.response.PermissionResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.dao.DataIntegrityViolationException;
+import kh.edu.istad.platform.restapi.exception.RestApiException;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -51,10 +54,14 @@ public class PermissionController {
                 request.description()
         );
 
-        PermissionResult result = createPermissionUseCase.execute(command);
-
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(toResponse(result));
+        try {
+            PermissionResult result = createPermissionUseCase.execute(command);
+            return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(result));
+        } catch (PermissionNameConflictException | DataIntegrityViolationException exception) {
+            throw new RestApiException(HttpStatus.CONFLICT, "Permission name already exists");
+        } catch (IllegalArgumentException exception) {
+            throw new RestApiException(HttpStatus.BAD_REQUEST, exception.getMessage());
+        }
     }
 
     // 2. List permissions
@@ -84,8 +91,12 @@ public class PermissionController {
                 sortDirection
         );
 
-        PageResult<PermissionResult> result =
-                listPermissionsUseCase.execute(query);
+        PageResult<PermissionResult> result;
+        try {
+            result = listPermissionsUseCase.execute(query);
+        } catch (IllegalArgumentException exception) {
+            throw new RestApiException(HttpStatus.BAD_REQUEST, exception.getMessage());
+        }
 
         List<PermissionResponse> content = result.content()
                 .stream()
@@ -110,7 +121,14 @@ public class PermissionController {
     public ResponseEntity<PermissionResponse> getPermission(
             @PathVariable UUID uuid
     ) {
-        PermissionResult result = getPermissionUseCase.execute(uuid);
+        PermissionResult result;
+        try {
+            result = getPermissionUseCase.execute(uuid);
+        } catch (IllegalArgumentException exception) {
+            throw new RestApiException(HttpStatus.NOT_FOUND, "Permission not found");
+        } catch (IllegalStateException exception) {
+            throw new RestApiException(HttpStatus.NOT_FOUND, "Permission not found");
+        }
 
         return ResponseEntity.ok(toResponse(result));
     }
@@ -129,9 +147,16 @@ public class PermissionController {
                 request.description()
         );
 
-        PermissionResult result = updatePermissionUseCase.execute(command);
-
-        return ResponseEntity.ok(toResponse(result));
+        try {
+            PermissionResult result = updatePermissionUseCase.execute(command);
+            return ResponseEntity.ok(toResponse(result));
+        } catch (PermissionNameConflictException | DataIntegrityViolationException exception) {
+            throw new RestApiException(HttpStatus.CONFLICT, "Permission name already exists");
+        } catch (IllegalArgumentException exception) {
+            throw new RestApiException(HttpStatus.BAD_REQUEST, exception.getMessage());
+        } catch (IllegalStateException exception) {
+            throw new RestApiException(HttpStatus.CONFLICT, exception.getMessage());
+        }
     }
 
     // 5. Delete permission
@@ -139,7 +164,13 @@ public class PermissionController {
     public ResponseEntity<Void> deletePermission(
             @PathVariable UUID uuid
     ) {
-        deletePermissionUseCase.execute(uuid);
+        try {
+            deletePermissionUseCase.execute(uuid);
+        } catch (IllegalArgumentException exception) {
+            throw new RestApiException(HttpStatus.NOT_FOUND, "Permission not found");
+        } catch (IllegalStateException exception) {
+            throw new RestApiException(HttpStatus.CONFLICT, exception.getMessage());
+        }
 
         return ResponseEntity.noContent().build();
     }
@@ -149,7 +180,9 @@ public class PermissionController {
     public ResponseEntity<Void> activatePermission(
             @PathVariable UUID uuid
     ) {
-        activatePermissionUseCase.execute(uuid);
+        try { activatePermissionUseCase.execute(uuid); }
+        catch (IllegalArgumentException exception) { throw new RestApiException(HttpStatus.NOT_FOUND, "Permission not found"); }
+        catch (IllegalStateException exception) { throw new RestApiException(HttpStatus.CONFLICT, exception.getMessage()); }
 
         return ResponseEntity.noContent().build();
     }
@@ -159,7 +192,9 @@ public class PermissionController {
     public ResponseEntity<Void> deactivatePermission(
             @PathVariable UUID uuid
     ) {
-        deactivatePermissionUseCase.execute(uuid);
+        try { deactivatePermissionUseCase.execute(uuid); }
+        catch (IllegalArgumentException exception) { throw new RestApiException(HttpStatus.NOT_FOUND, "Permission not found"); }
+        catch (IllegalStateException exception) { throw new RestApiException(HttpStatus.CONFLICT, exception.getMessage()); }
 
         return ResponseEntity.noContent().build();
     }
@@ -172,6 +207,7 @@ public class PermissionController {
                 result.action(),
                 result.description(),
                 result.active(),
+                result.system(),
                 result.createdAt(),
                 result.updatedAt()
         );

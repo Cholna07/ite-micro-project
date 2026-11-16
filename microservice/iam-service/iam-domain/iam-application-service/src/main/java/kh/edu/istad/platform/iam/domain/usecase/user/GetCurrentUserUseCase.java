@@ -31,7 +31,9 @@ public class GetCurrentUserUseCase {
         try {
             userUuid = UUID.fromString(currentActor);
         } catch (IllegalArgumentException exception) {
-            throw new IllegalStateException("Invalid authenticated user identifier");
+            userUuid = userRepository.findByUsernameOrEmail(currentActor)
+                    .map(User::getUuid)
+                    .orElseThrow(() -> new IllegalStateException("Authenticated local user could not be resolved"));
         }
 
         User user = userRepository.findByUuid(userUuid)
@@ -60,7 +62,8 @@ public class GetCurrentUserUseCase {
                 user.isEnabled(),
                 !user.isAccountNonLocked(),
                 user.getCreatedAt(),
-                user.getUpdatedAt()
+                user.getUpdatedAt(),
+                user.getPictureUrl()
         );
     }
 }

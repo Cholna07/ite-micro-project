@@ -31,6 +31,6 @@ public class ConsentController {
                 : client == null ? clientId : client.getClientName());
         model.addAttribute("csrfToken", csrf == null ? "" : csrf.getToken());
         model.addAttribute("csrfParameter", csrf == null ? "_csrf" : csrf.getParameterName());
-        return "consent";
+        return "forward:/frontend/index.html";
     }
 }

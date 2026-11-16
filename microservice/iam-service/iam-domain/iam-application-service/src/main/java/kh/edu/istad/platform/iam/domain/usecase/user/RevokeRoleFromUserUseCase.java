@@ -3,6 +3,7 @@ package kh.edu.istad.platform.iam.domain.usecase.user;
 import kh.edu.istad.platform.iam.domain.entity.User;
 import kh.edu.istad.platform.iam.domain.entity.UserRole;
 import kh.edu.istad.platform.iam.domain.port.out.CurrentActorProvider;
+import kh.edu.istad.platform.iam.domain.port.out.RoleRepository;
 import kh.edu.istad.platform.iam.domain.port.out.UserRepository;
 import kh.edu.istad.platform.iam.domain.port.out.UserRoleRepository;
 import org.springframework.stereotype.Component;
@@ -14,15 +15,18 @@ public class RevokeRoleFromUserUseCase {
 
     private final UserRepository userRepository;
     private final UserRoleRepository userRoleRepository;
+    private final RoleRepository roleRepository;
     private final CurrentActorProvider currentActorProvider;
 
     public RevokeRoleFromUserUseCase(
             UserRepository userRepository,
             UserRoleRepository userRoleRepository,
+            RoleRepository roleRepository,
             CurrentActorProvider currentActorProvider
     ) {
         this.userRepository = userRepository;
         this.userRoleRepository = userRoleRepository;
+        this.roleRepository = roleRepository;
         this.currentActorProvider = currentActorProvider;
     }
 
@@ -40,7 +44,9 @@ public class RevokeRoleFromUserUseCase {
 
         // Find the active assignment using internal database IDs.
         UserRole assignment = userRoleRepository
-                .findActiveAssignment(user.getId(), getRoleId(roleUuid))
+                .findActiveAssignment(user.getId(), roleRepository.findByUuid(roleUuid)
+                        .orElseThrow(() -> new IllegalArgumentException("Role not found: " + roleUuid))
+                        .getId())
                 .orElseThrow(() ->
                         new IllegalArgumentException("Active role assignment not found"));
 
@@ -51,9 +57,4 @@ public class RevokeRoleFromUserUseCase {
         userRoleRepository.save(assignment);
     }
 
-    private Long getRoleId(UUID roleUuid) {
-        throw new UnsupportedOperationException(
-                "Role lookup must be implemented using RoleRepository"
-        );
-    }
 }

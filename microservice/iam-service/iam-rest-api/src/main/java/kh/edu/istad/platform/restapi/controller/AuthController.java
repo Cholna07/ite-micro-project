@@ -2,10 +2,13 @@ package kh.edu.istad.platform.restapi.controller;
 
 import jakarta.validation.Valid;
 import kh.edu.istad.platform.iam.domain.dto.command.LoginUserCommand;
+import kh.edu.istad.platform.iam.domain.dto.command.LoginSessionContext;
 import kh.edu.istad.platform.iam.domain.dto.command.RegisterUserCommand;
 import kh.edu.istad.platform.iam.domain.dto.result.LoginResult;
 import kh.edu.istad.platform.iam.domain.dto.result.UserResult;
 import kh.edu.istad.platform.iam.domain.usecase.user.LoginUserUseCase;
+import kh.edu.istad.platform.iam.domain.usecase.user.RecordLoginEventUseCase;
+import kh.edu.istad.platform.iam.domain.entity.LoginEventOutcome;
 import kh.edu.istad.platform.iam.domain.usecase.user.RegisterUserUseCase;
 import kh.edu.istad.platform.restapi.dto.request.LoginRequest;
 import kh.edu.istad.platform.restapi.dto.request.RegisterUserRequest;
@@ -16,6 +19,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -24,6 +30,8 @@ public class AuthController {
 
     private final RegisterUserUseCase registerUserUseCase;
     private final LoginUserUseCase loginUserUseCase;
+    private final RecordLoginEventUseCase recordLoginEventUseCase;
+    private static final Logger log = LoggerFactory.getLogger(AuthController.class);
 
     @PostMapping("/register")
     public ResponseEntity<UserResponse> register(
@@ -69,14 +77,25 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(
-            @Valid @RequestBody LoginRequest request
+            @Valid @RequestBody LoginRequest request,
+            HttpServletRequest httpRequest
     ) {
         LoginUserCommand command = new LoginUserCommand(
                 request.usernameOrEmail(),
                 request.password()
         );
 
-        LoginResult result = loginUserUseCase.execute(command);
+        LoginResult result;
+        try {
+            result = loginUserUseCase.execute(command,
+                    new LoginSessionContext(httpRequest.getRemoteAddr(), httpRequest.getHeader("User-Agent")));
+        } catch (RuntimeException authenticationFailure) {
+            recordLoginEventSafely(request.usernameOrEmail(), LoginEventOutcome.FAILURE,
+                    httpRequest, failureCategory(authenticationFailure));
+            throw authenticationFailure;
+        }
+
+        recordLoginEventSafely(request.usernameOrEmail(), LoginEventOutcome.SUCCESS, httpRequest, null);
 
         LoginResponse response = new LoginResponse(
                 result.accessToken(),
@@ -88,5 +107,23 @@ public class AuthController {
         );
 
         return ResponseEntity.ok(response);
+    }
+
+    private void recordLoginEventSafely(String usernameOrEmail, LoginEventOutcome outcome,
+                                        HttpServletRequest request, String failureCategory) {
+        try {
+            recordLoginEventUseCase.execute(usernameOrEmail, outcome,
+                    request.getRemoteAddr(), request.getHeader("User-Agent"), failureCategory);
+        } catch (RuntimeException recordingFailure) {
+            // Authentication outcome is decided only by LoginUserUseCase. A logging outage
+            // must not change credential validation or turn a successful login into a failure.
+            log.error("Could not persist login event with outcome {}", outcome, recordingFailure);
+        }
+    }
+
+    private String failureCategory(RuntimeException exception) {
+        if (exception instanceof IllegalArgumentException) return "INVALID_CREDENTIALS";
+        if (exception instanceof IllegalStateException) return "ACCOUNT_UNAVAILABLE";
+        return "AUTHENTICATION_FAILED";
     }
 }

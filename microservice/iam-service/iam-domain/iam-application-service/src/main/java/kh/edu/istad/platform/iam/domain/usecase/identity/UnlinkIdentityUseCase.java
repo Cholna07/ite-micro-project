@@ -4,7 +4,10 @@ import kh.edu.istad.platform.iam.domain.entity.Identity;
 import kh.edu.istad.platform.iam.domain.port.out.CurrentActorProvider;
 import kh.edu.istad.platform.iam.domain.port.out.IdentityRepository;
 import kh.edu.istad.platform.iam.domain.port.out.UserRepository;
+import kh.edu.istad.platform.iam.domain.entity.AccountActivityEventType;
+import kh.edu.istad.platform.iam.domain.usecase.user.RecordAccountActivityEventUseCase;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -14,17 +17,21 @@ public class UnlinkIdentityUseCase {
     private final UserRepository userRepository;
     private final IdentityRepository identityRepository;
     private final CurrentActorProvider currentActorProvider;
+    private final RecordAccountActivityEventUseCase recordActivity;
 
     public UnlinkIdentityUseCase(
             UserRepository userRepository,
             IdentityRepository identityRepository,
-            CurrentActorProvider currentActorProvider
+            CurrentActorProvider currentActorProvider,
+            RecordAccountActivityEventUseCase recordActivity
     ) {
         this.userRepository = userRepository;
         this.identityRepository = identityRepository;
         this.currentActorProvider = currentActorProvider;
+        this.recordActivity = recordActivity;
     }
 
+    @Transactional
     public void execute(UUID userUuid, UUID identityUuid) {
 
         if (userUuid == null || identityUuid == null) {
@@ -55,6 +62,18 @@ public class UnlinkIdentityUseCase {
             );
         }
 
+        boolean hasPasswordLogin = user.getPasswordHash() != null
+                && !user.getPasswordHash().isBlank();
+        boolean hasAnotherSocialLogin = identityRepository.findByUserId(user.getId())
+                .stream()
+                .anyMatch(candidate -> !candidate.isDeleted()
+                        && !candidate.getUuid().equals(identityUuid));
+        if (!hasPasswordLogin && !hasAnotherSocialLogin) {
+            throw new IllegalStateException(
+                    "Cannot unlink the only usable login method. Set a password or link another provider first."
+            );
+        }
+
         Instant now = Instant.now();
 
         identity.setDeleted(true);
@@ -64,5 +83,7 @@ public class UnlinkIdentityUseCase {
         identity.setUpdatedBy(currentActorProvider.getCurrentActor());
 
         identityRepository.save(identity);
+        recordActivity.execute(user.getUuid(), AccountActivityEventType.SOCIAL_ACCOUNT_UNLINKED,
+                "A social account was unlinked");
     }
 }

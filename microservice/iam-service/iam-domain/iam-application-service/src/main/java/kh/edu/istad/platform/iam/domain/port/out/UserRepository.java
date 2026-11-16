@@ -1,9 +1,9 @@
 package kh.edu.istad.platform.iam.domain.port.out;
 
 import kh.edu.istad.platform.iam.domain.dto.query.UserFilterQuery;
+import kh.edu.istad.platform.iam.domain.dto.result.PageResult;
 import kh.edu.istad.platform.iam.domain.entity.User;
 
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -16,7 +16,7 @@ public interface UserRepository {
     Optional<User> findByEmail(String email);
     Optional<User> findByUsernameOrEmail(String usernameOrEmail);
 
-    List<User> findAll(UserFilterQuery query);
+    PageResult<User> findAll(UserFilterQuery query);
 
     // User creation and update
     User save(User user);

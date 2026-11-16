@@ -9,6 +9,9 @@ import kh.edu.istad.platform.iam.domain.dto.result.PageResult;
 import kh.edu.istad.platform.iam.domain.dto.result.PermissionAssignmentResult;
 import kh.edu.istad.platform.iam.domain.dto.result.RoleResult;
 import kh.edu.istad.platform.iam.domain.dto.result.RoleSummary;
+import kh.edu.istad.platform.iam.domain.dto.result.RolePermissionAssignmentView;
+import kh.edu.istad.platform.iam.domain.exception.RoleNameConflictException;
+import kh.edu.istad.platform.iam.domain.exception.RolePermissionAlreadyAssignedException;
 import kh.edu.istad.platform.iam.domain.usecase.role.ActivateRoleUseCase;
 import kh.edu.istad.platform.iam.domain.usecase.role.AssignPermissionsToRoleUseCase;
 import kh.edu.istad.platform.iam.domain.usecase.role.CreateRoleUseCase;
@@ -17,6 +20,7 @@ import kh.edu.istad.platform.iam.domain.usecase.role.DeleteRoleUseCase;
 import kh.edu.istad.platform.iam.domain.usecase.role.GetRoleUseCase;
 import kh.edu.istad.platform.iam.domain.usecase.role.ListRolesUseCase;
 import kh.edu.istad.platform.iam.domain.usecase.role.RevokePermissionFromRoleUseCase;
+import kh.edu.istad.platform.iam.domain.usecase.role.ListRolePermissionAssignmentsUseCase;
 import kh.edu.istad.platform.iam.domain.usecase.role.UpdateRoleUseCase;
 import kh.edu.istad.platform.restapi.dto.request.AssignPermissionsToRoleRequest;
 import kh.edu.istad.platform.restapi.dto.request.CreateRoleRequest;
@@ -24,9 +28,11 @@ import kh.edu.istad.platform.restapi.dto.request.UpdateRoleRequest;
 import kh.edu.istad.platform.restapi.dto.response.PageMetadata;
 import kh.edu.istad.platform.restapi.dto.response.PageResponse;
 import kh.edu.istad.platform.restapi.dto.response.RoleResponse;
+import kh.edu.istad.platform.restapi.exception.RestApiException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -46,6 +52,7 @@ public class RoleController {
     private final DeactivateRoleUseCase deactivateRoleUseCase;
     private final AssignPermissionsToRoleUseCase assignPermissionsToRoleUseCase;
     private final RevokePermissionFromRoleUseCase revokePermissionFromRoleUseCase;
+    private final ListRolePermissionAssignmentsUseCase listRolePermissionAssignmentsUseCase;
 
     // 1. Create role
     @PostMapping
@@ -57,10 +64,14 @@ public class RoleController {
                 request.description()
         );
 
-        RoleResult result = createRoleUseCase.execute(command);
-
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(toResponse(result));
+        try {
+            RoleResult result = createRoleUseCase.execute(command);
+            return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(result));
+        } catch (RoleNameConflictException exception) {
+            throw new RestApiException(HttpStatus.CONFLICT, exception.getMessage());
+        } catch (DataIntegrityViolationException exception) {
+            throw new RestApiException(HttpStatus.CONFLICT, "Role name already exists");
+        }
     }
 
     // 2. List roles
@@ -86,7 +97,12 @@ public class RoleController {
                 sortDirection
         );
 
-        PageResult<RoleSummary> result = listRolesUseCase.execute(query);
+        PageResult<RoleSummary> result;
+        try {
+            result = listRolesUseCase.execute(query);
+        } catch (IllegalArgumentException exception) {
+            throw new RestApiException(HttpStatus.BAD_REQUEST, exception.getMessage());
+        }
 
         List<RoleResponse> content = result.content()
                 .stream()
@@ -130,9 +146,14 @@ public class RoleController {
                 request.description()
         );
 
-        RoleResult result = updateRoleUseCase.execute(command);
-
-        return ResponseEntity.ok(toResponse(result));
+        try {
+            RoleResult result = updateRoleUseCase.execute(command);
+            return ResponseEntity.ok(toResponse(result));
+        } catch (RoleNameConflictException exception) {
+            throw new RestApiException(HttpStatus.CONFLICT, exception.getMessage());
+        } catch (DataIntegrityViolationException exception) {
+            throw new RestApiException(HttpStatus.CONFLICT, "Role name already exists");
+        }
     }
 
     // 5. Delete role
@@ -166,6 +187,11 @@ public class RoleController {
     }
 
     // 8. Assign permissions to role
+    @GetMapping("/{uuid}/permissions")
+    public ResponseEntity<List<RolePermissionAssignmentView>> listPermissions(@PathVariable UUID uuid) {
+        return ResponseEntity.ok(listRolePermissionAssignmentsUseCase.execute(uuid));
+    }
+
     @PostMapping("/{uuid}/permissions")
     public ResponseEntity<List<PermissionAssignmentResult>> assignPermissions(
             @PathVariable UUID uuid,
@@ -179,10 +205,19 @@ public class RoleController {
                         null
                 );
 
-        List<PermissionAssignmentResult> result =
-                assignPermissionsToRoleUseCase.execute(command);
-
-        return ResponseEntity.status(HttpStatus.CREATED).body(result);
+        try {
+            List<PermissionAssignmentResult> result = assignPermissionsToRoleUseCase.execute(command);
+            return ResponseEntity.status(HttpStatus.CREATED).body(result);
+        } catch (RolePermissionAlreadyAssignedException exception) {
+            throw new RestApiException(HttpStatus.CONFLICT, exception.getMessage());
+        } catch (DataIntegrityViolationException exception) {
+            throw new RestApiException(HttpStatus.CONFLICT,
+                    "One or more permissions are already assigned to this role");
+        } catch (IllegalArgumentException exception) {
+            throw new RestApiException(HttpStatus.BAD_REQUEST, exception.getMessage());
+        } catch (IllegalStateException exception) {
+            throw new RestApiException(HttpStatus.CONFLICT, exception.getMessage());
+        }
     }
 
     // 9. Revoke permission from role

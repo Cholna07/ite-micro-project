@@ -2,6 +2,8 @@ package kh.edu.istad.platform.restapi.controller;
 
 import jakarta.validation.Valid;
 import kh.edu.istad.platform.iam.domain.dto.command.ChangePasswordCommand;
+import kh.edu.istad.platform.iam.domain.dto.command.AssignRolesToUserCommand;
+import kh.edu.istad.platform.iam.domain.dto.command.GrantPermissionsToUserCommand;
 import kh.edu.istad.platform.iam.domain.dto.command.CreateUserCommand;
 import kh.edu.istad.platform.iam.domain.dto.command.ResetUserPasswordCommand;
 import kh.edu.istad.platform.iam.domain.dto.command.UpdateUserProfileCommand;
@@ -9,7 +11,19 @@ import kh.edu.istad.platform.iam.domain.dto.query.UserFilterQuery;
 import kh.edu.istad.platform.iam.domain.dto.result.PageResult;
 import kh.edu.istad.platform.iam.domain.dto.result.UserResult;
 import kh.edu.istad.platform.iam.domain.dto.result.UserSummary;
+import kh.edu.istad.platform.iam.domain.dto.result.RoleAssignmentResult;
+import kh.edu.istad.platform.iam.domain.dto.result.PermissionGrantResult;
+import kh.edu.istad.platform.iam.domain.dto.result.UserRoleAssignmentView;
+import kh.edu.istad.platform.iam.domain.dto.result.UserPermissionAssignmentView;
+import kh.edu.istad.platform.iam.domain.exception.RoleAlreadyAssignedException;
+import kh.edu.istad.platform.iam.domain.exception.PermissionAlreadyAssignedException;
 import kh.edu.istad.platform.iam.domain.usecase.user.ChangePasswordUseCase;
+import kh.edu.istad.platform.iam.domain.usecase.user.AssignRolesToUserUseCase;
+import kh.edu.istad.platform.iam.domain.usecase.user.GrantPermissionsToUserUseCase;
+import kh.edu.istad.platform.iam.domain.usecase.user.RevokeRoleFromUserUseCase;
+import kh.edu.istad.platform.iam.domain.usecase.user.RevokePermissionFromUserUseCase;
+import kh.edu.istad.platform.iam.domain.usecase.user.ListUserRoleAssignmentsUseCase;
+import kh.edu.istad.platform.iam.domain.usecase.user.ListUserPermissionAssignmentsUseCase;
 import kh.edu.istad.platform.iam.domain.usecase.user.CreateUserUseCase;
 import kh.edu.istad.platform.iam.domain.usecase.user.DeleteUserUseCase;
 import kh.edu.istad.platform.iam.domain.usecase.user.DisableUserUseCase;
@@ -21,6 +35,8 @@ import kh.edu.istad.platform.iam.domain.usecase.user.ResetUserPasswordUseCase;
 import kh.edu.istad.platform.iam.domain.usecase.user.UnlockUserUseCase;
 import kh.edu.istad.platform.iam.domain.usecase.user.UpdateUserProfileUseCase;
 import kh.edu.istad.platform.restapi.dto.request.ChangePasswordRequest;
+import kh.edu.istad.platform.restapi.dto.request.AssignRolesToUserRequest;
+import kh.edu.istad.platform.restapi.dto.request.GrantPermissionsToUserRequest;
 import kh.edu.istad.platform.restapi.dto.request.CreateUserRequest;
 import kh.edu.istad.platform.restapi.dto.request.ResetUserPasswordRequest;
 import kh.edu.istad.platform.restapi.dto.request.UpdateUserProfileRequest;
@@ -30,12 +46,14 @@ import kh.edu.istad.platform.restapi.exception.RestApiException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.web.bind.annotation.*;
 import kh.edu.istad.platform.iam.domain.dto.result.UserAuthoritiesResult;
 import kh.edu.istad.platform.iam.domain.usecase.user.GetUserAuthoritiesUseCase;
 import kh.edu.istad.platform.restapi.dto.response.UserAuthoritiesResponse;
 
 import java.util.Set;
+import java.util.List;
 
 import java.util.UUID;
 
@@ -56,6 +74,12 @@ public class UserController {
     private final UnlockUserUseCase unlockUserUseCase;
     private final DeleteUserUseCase deleteUserUseCase;
     private final GetUserAuthoritiesUseCase getUserAuthoritiesUseCase;
+    private final AssignRolesToUserUseCase assignRolesToUserUseCase;
+    private final RevokeRoleFromUserUseCase revokeRoleFromUserUseCase;
+    private final GrantPermissionsToUserUseCase grantPermissionsToUserUseCase;
+    private final RevokePermissionFromUserUseCase revokePermissionFromUserUseCase;
+    private final ListUserRoleAssignmentsUseCase listUserRoleAssignmentsUseCase;
+    private final ListUserPermissionAssignmentsUseCase listUserPermissionAssignmentsUseCase;
 
     // POST /api/users
     @PostMapping
@@ -83,16 +107,21 @@ public class UserController {
             @RequestParam(required = false) Boolean enabled,
             @RequestParam(required = false) Boolean emailVerified,
             @RequestParam(required = false) Boolean deleted,
+            @RequestParam(required = false) Boolean locked,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "username") String sortBy,
             @RequestParam(defaultValue = "ASC") String sortDirection
     ) {
+        if (page < 0 || size < 1 || size > 100) {
+            throw new RestApiException(HttpStatus.BAD_REQUEST, "Page must be non-negative and size must be between 1 and 100");
+        }
         UserFilterQuery query = new UserFilterQuery(
                 keyword,
                 enabled,
                 emailVerified,
                 deleted,
+                locked,
                 page,
                 size,
                 sortBy,
@@ -134,6 +163,8 @@ public class UserController {
     ) {
         UpdateUserProfileCommand command = new UpdateUserProfileCommand(
                 uuid,
+                request.username(),
+                request.email(),
                 request.givenName(),
                 request.familyName(),
                 request.middleName(),
@@ -254,4 +285,77 @@ public class UserController {
 
         return ResponseEntity.ok(response);
     }
+
+    @PostMapping("/{uuid}/roles")
+    public ResponseEntity<List<RoleAssignmentResult>> assignRoles(
+            @PathVariable UUID uuid,
+            @Valid @RequestBody AssignRolesToUserRequest request
+    ) {
+        try {
+            List<RoleAssignmentResult> result = assignRolesToUserUseCase.execute(
+                    new AssignRolesToUserCommand(uuid, request.roleUuids(), request.expiresAt(), request.reason())
+            );
+            return ResponseEntity.status(HttpStatus.CREATED).body(result);
+        } catch (RoleAlreadyAssignedException exception) {
+            throw new RestApiException(HttpStatus.CONFLICT, exception.getMessage());
+        } catch (DataIntegrityViolationException exception) {
+            // Covers a concurrent request that wins the database uniqueness race.
+            throw new RestApiException(HttpStatus.CONFLICT, "One or more roles are already assigned to this user");
+        } catch (IllegalArgumentException exception) {
+            throw new RestApiException(HttpStatus.BAD_REQUEST, exception.getMessage());
+        }
+    }
+
+    @GetMapping("/{uuid}/roles/assignments")
+    public ResponseEntity<List<UserRoleAssignmentView>> listRoleAssignments(@PathVariable UUID uuid) {
+        return ResponseEntity.ok(listUserRoleAssignmentsUseCase.execute(uuid));
+    }
+
+    @DeleteMapping("/{uuid}/roles/{roleUuid}")
+    public ResponseEntity<Void> revokeRole(
+            @PathVariable UUID uuid,
+            @PathVariable UUID roleUuid,
+            @RequestParam(required = false) String reason
+    ) {
+        revokeRoleFromUserUseCase.execute(uuid, roleUuid, reason);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{uuid}/permissions")
+    public ResponseEntity<List<PermissionGrantResult>> grantPermissions(
+            @PathVariable UUID uuid,
+            @Valid @RequestBody GrantPermissionsToUserRequest request
+    ) {
+        try {
+            List<PermissionGrantResult> result = grantPermissionsToUserUseCase.execute(
+                    new GrantPermissionsToUserCommand(uuid, request.permissionUuids(), request.effect(), request.expiresAt(), request.reason())
+            );
+            return ResponseEntity.status(HttpStatus.CREATED).body(result);
+        } catch (PermissionAlreadyAssignedException exception) {
+            throw new RestApiException(HttpStatus.CONFLICT, exception.getMessage());
+        } catch (DataIntegrityViolationException exception) {
+            throw new RestApiException(HttpStatus.CONFLICT,
+                    "One or more permissions are already assigned to this user");
+        } catch (IllegalArgumentException exception) {
+            throw new RestApiException(HttpStatus.BAD_REQUEST, exception.getMessage());
+        } catch (IllegalStateException exception) {
+            throw new RestApiException(HttpStatus.CONFLICT, exception.getMessage());
+        }
+    }
+
+    @GetMapping("/{uuid}/permissions/direct")
+    public ResponseEntity<List<UserPermissionAssignmentView>> listDirectPermissionAssignments(@PathVariable UUID uuid) {
+        return ResponseEntity.ok(listUserPermissionAssignmentsUseCase.execute(uuid));
+    }
+
+    @DeleteMapping("/{uuid}/permissions/{permissionUuid}")
+    public ResponseEntity<Void> revokePermission(
+            @PathVariable UUID uuid,
+            @PathVariable UUID permissionUuid,
+            @RequestParam(required = false) String reason
+    ) {
+        revokePermissionFromUserUseCase.execute(uuid, permissionUuid, reason);
+        return ResponseEntity.noContent().build();
+    }
+
 }

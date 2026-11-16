@@ -15,6 +15,7 @@ public class PermissionRestMapper {
                 permission.getAction().value(),
                 permission.getDescription(),
                 permission.isActive(),
+                permission.isSystem(),
                 permission.getCreatedAt(),
                 permission.getUpdatedAt()
         );

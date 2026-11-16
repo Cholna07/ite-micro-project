@@ -12,12 +12,15 @@ import kh.edu.istad.platform.iam.domain.port.out.RoleRepository;
 import kh.edu.istad.platform.iam.domain.port.out.UserRepository;
 import kh.edu.istad.platform.iam.domain.port.out.UserRoleRepository;
 import kh.edu.istad.platform.iam.domain.usecase.user.GetUserAuthoritiesUseCase;
+import kh.edu.istad.platform.iam.domain.usecase.user.RecordAccountActivityEventUseCase;
+import kh.edu.istad.platform.iam.domain.entity.AccountActivityEventType;
 import kh.edu.istad.platform.iam.domain.valueobject.Email;
 import kh.edu.istad.platform.iam.domain.valueobject.IdentityProvider;
 import kh.edu.istad.platform.iam.domain.valueobject.ProviderSubject;
 import kh.edu.istad.platform.iam.domain.valueobject.Username;
 
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -30,21 +33,25 @@ public class FindOrProvisionFederatedUserUseCase {
     private final UserRoleRepository userRoleRepository;
     private final RoleRepository roleRepository;
     private final GetUserAuthoritiesUseCase getUserAuthoritiesUseCase;
+    private final RecordAccountActivityEventUseCase recordActivity;
 
     public FindOrProvisionFederatedUserUseCase(
             IdentityRepository identityRepository,
             UserRepository userRepository,
             UserRoleRepository userRoleRepository,
             RoleRepository roleRepository,
-            GetUserAuthoritiesUseCase getUserAuthoritiesUseCase
+            GetUserAuthoritiesUseCase getUserAuthoritiesUseCase,
+            RecordAccountActivityEventUseCase recordActivity
     ) {
         this.identityRepository = identityRepository;
         this.userRepository = userRepository;
         this.userRoleRepository = userRoleRepository;
         this.roleRepository = roleRepository;
         this.getUserAuthoritiesUseCase = getUserAuthoritiesUseCase;
+        this.recordActivity = recordActivity;
     }
 
+    @Transactional
     public AuthUserResult execute(FederatedIdentityCommand command) {
 
         if (command == null) {
@@ -95,6 +102,7 @@ public class FindOrProvisionFederatedUserUseCase {
 
         User user;
         boolean newUser = false;
+        boolean linkedIdentity = false;
 
         if (existingIdentity != null) {
 
@@ -203,6 +211,7 @@ public class FindOrProvisionFederatedUserUseCase {
             identity.setCreatedAt(now);
 
             identityRepository.save(identity);
+            linkedIdentity = true;
         }
 
         // 5. Assign the default USER role to newly registered users.
@@ -239,6 +248,11 @@ public class FindOrProvisionFederatedUserUseCase {
 
         // 6. Load the user's roles and permissions.
         var authorities = getUserAuthoritiesUseCase.execute(user.getUuid());
+
+        if (linkedIdentity) {
+            recordActivity.execute(user.getUuid(), AccountActivityEventType.SOCIAL_ACCOUNT_LINKED,
+                    "A social account was linked");
+        }
 
         return new AuthUserResult(
                 user.getUuid(),

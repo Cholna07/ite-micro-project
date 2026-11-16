@@ -42,7 +42,9 @@ public class UserRoleRepositoryAdapter implements UserRoleRepository {
             entity.setReason(userRole.getReason());
         }
 
-        UserRoleJpaEntity savedEntity = userRoleJpaRepository.save(entity);
+        // Flush here so a concurrent assignment hitting the partial unique index
+        // fails inside the transactional use case and the entire batch rolls back.
+        UserRoleJpaEntity savedEntity = userRoleJpaRepository.saveAndFlush(entity);
 
         return userRolePersistenceMapper.toDomain(savedEntity);
     }
@@ -72,6 +74,11 @@ public class UserRoleRepositoryAdapter implements UserRoleRepository {
                 roleId,
                 Instant.now()
         );
+    }
+
+    @Override
+    public int revokeExpiredAssignments(Long userId, Long roleId, Instant now, String actor) {
+        return userRoleJpaRepository.revokeExpiredAssignments(userId, roleId, now, actor);
     }
 
     @Override

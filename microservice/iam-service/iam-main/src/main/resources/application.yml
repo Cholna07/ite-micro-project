@@ -1,9 +1,14 @@
 iam:
+  bootstrap-admin-username: ${IAM_BOOTSTRAP_ADMIN_USERNAME:}
   security:
     jwt:
       issuer: cholna-iam
       secret: ${IAM_JWT_SECRET:local-development-only-change-me-32-bytes-minimum}
       access-token-expiration: 15m
+      key-store-path: ${IAM_JWT_KEYSTORE_PATH:}
+      key-store-password: ${IAM_JWT_KEYSTORE_PASSWORD:}
+      key-alias: ${IAM_JWT_KEY_ALIAS:}
+      key-password: ${IAM_JWT_KEY_PASSWORD:}
 
   oauth2:
     registration:

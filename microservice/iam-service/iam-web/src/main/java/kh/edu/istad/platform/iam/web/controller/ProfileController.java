@@ -48,24 +48,12 @@ public class ProfileController {
 
     @GetMapping("/")
     public String home(Authentication authentication, @RequestAttribute(name = "_csrf", required = false) CsrfToken csrf, Model model) {
-        AuthUserResult account = account(authentication);
-        UserResult user = getUser.execute(account.uuid());
-        UserAuthoritiesResult authorities = getAuthorities.execute(account.uuid());
-        Map<String, Object> claims = new LinkedHashMap<>();
-        claims.put("sub", user.uuid()); claims.put("preferred_username", user.username());
-        claims.put("email", user.email()); claims.put("email_verified", user.emailVerified());
-        claims.put("given_name", user.givenName()); claims.put("family_name", user.familyName());
-        model.addAttribute("user", user); model.addAttribute("claims", claims);
-        model.addAttribute("roles", authorities.roles()); model.addAttribute("permissions", authorities.permissions());
-        csrf(model, csrf);
-        return "index";
+        return "forward:/frontend/index.html";
     }
 
     @GetMapping("/profile/edit")
     public String edit(Authentication authentication, Model model, @RequestAttribute(name = "_csrf", required = false) CsrfToken csrf) {
-        model.addAttribute("user", getUser.execute(account(authentication).uuid()));
-        model.addAttribute("errors", List.of()); model.addAttribute("saved", false);
-        csrf(model, csrf); return "profile-edit";
+        return "forward:/frontend/index.html";
     }
 
     @PostMapping("/profile/edit")
@@ -81,20 +69,19 @@ public class ProfileController {
         if (phoneNumber != null && phoneNumber.length() > 32) errors.add(messages.getMessage("profile.phoneTooLong", null, locale));
         if (errors.isEmpty()) {
             try {
-                updateProfile.execute(new UpdateUserProfileCommand(uuid, emptyToNull(givenName), emptyToNull(familyName),
+                updateProfile.execute(new UpdateUserProfileCommand(uuid, null, null, emptyToNull(givenName), emptyToNull(familyName),
                         emptyToNull(middleName), emptyToNull(nickname), emptyToNull(gender), null, null, null, null,
                         null, null, emptyToNull(phoneNumber), null, null, null, null, null));
                 model.addAttribute("saved", true);
             } catch (IllegalArgumentException exception) { errors.add(messages.getMessage("profile.updateFailed", null, locale)); }
         }
         model.addAttribute("user", getUser.execute(uuid)); model.addAttribute("errors", errors);
-        csrf(model, csrf); return "profile-edit";
+        csrf(model, csrf); return "forward:/frontend/index.html";
     }
 
     @GetMapping("/profile/password")
     public String password(@RequestAttribute(name = "_csrf", required = false) CsrfToken csrf, Model model) {
-        model.addAttribute("errors", List.of()); model.addAttribute("saved", false); csrf(model, csrf);
-        return "change-password";
+        return "forward:/frontend/index.html";
     }
 
     @PostMapping("/profile/password")
@@ -110,18 +97,12 @@ public class ProfileController {
                 model.addAttribute("saved", true);
             } catch (IllegalArgumentException exception) { errors.add(messages.getMessage("password.changeFailed", null, locale)); }
         }
-        model.addAttribute("errors", errors); csrf(model, csrf); return "change-password";
+        model.addAttribute("errors", errors); csrf(model, csrf); return "forward:/frontend/index.html";
     }
 
     @GetMapping("/profile/accounts")
     public String accounts(Authentication authentication, @RequestAttribute(name = "_csrf", required = false) CsrfToken csrf, Model model) {
-        List<IdentityResult> linked = listIdentities.execute(account(authentication).uuid());
-        model.addAttribute("identities", linked);
-        model.addAttribute("google", linked.stream().anyMatch(i -> i.provider().equalsIgnoreCase("GOOGLE")));
-        model.addAttribute("github", linked.stream().anyMatch(i -> i.provider().equalsIgnoreCase("GITHUB")));
-        model.addAttribute("facebook", linked.stream().anyMatch(i -> i.provider().equalsIgnoreCase("FACEBOOK")));
-        csrf(model, csrf);
-        return "linked-accounts";
+        return "forward:/frontend/index.html";
     }
 
     @PostMapping("/profile/accounts/{identityUuid}/unlink")
@@ -131,7 +112,7 @@ public class ProfileController {
     }
 
     @GetMapping("/profile/apps")
-    public String apps(Model model) { model.addAttribute("applications", List.of()); return "connected-apps"; }
+    public String apps(Model model) { return "forward:/frontend/index.html"; }
 
     private AuthUserResult account(Authentication authentication) {
         return loadUser.execute(authentication.getName());

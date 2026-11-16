@@ -2,10 +2,18 @@
 package kh.edu.istad.platform.restapi.dto.request;
 
 import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.Email;
 
 import java.time.LocalDate;
 
 public record UpdateUserProfileRequest(
+
+        @Size(max = 100)
+        String username,
+
+        @Email
+        @Size(max = 150)
+        String email,
 
         @Size(max = 100)
         String givenName,

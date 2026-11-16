@@ -37,6 +37,10 @@ public class DeactivatePermissionUseCase {
             );
         }
 
+        if (permission.isSystem()) {
+            throw new IllegalStateException("System permission cannot be deactivated");
+        }
+
         if (!permission.isActive()) {
             throw new IllegalStateException(
                     "Permission is already inactive"

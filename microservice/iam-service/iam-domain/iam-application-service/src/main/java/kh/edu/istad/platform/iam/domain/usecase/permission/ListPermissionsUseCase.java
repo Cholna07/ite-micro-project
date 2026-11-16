@@ -7,9 +7,8 @@ import kh.edu.istad.platform.iam.domain.entity.Permission;
 import kh.edu.istad.platform.iam.domain.port.out.PermissionRepository;
 import org.springframework.stereotype.Component;
 
-import java.util.Comparator;
 import java.util.List;
-import java.util.Locale;
+import java.util.Set;
 @Component
 public class ListPermissionsUseCase {
 
@@ -29,150 +28,17 @@ public class ListPermissionsUseCase {
             );
         }
 
-        if (query.page() < 0 || query.size() <= 0) {
-            throw new IllegalArgumentException(
-                    "Page must be zero or greater and size must be greater than zero"
-            );
-        }
+        if (query.page() < 0 || query.size() < 1 || query.size() > 100)
+            throw new IllegalArgumentException("Page must be non-negative and size must be between 1 and 100");
+        Set<String> sortFields = Set.of("name", "resource", "action", "createdAt", "updatedAt", "active", "systemPermission");
+        if (query.sortBy() == null || !sortFields.contains(query.sortBy()))
+            throw new IllegalArgumentException("Unsupported permission sort field");
+        if (query.sortDirection() == null || !(query.sortDirection().equalsIgnoreCase("ASC") || query.sortDirection().equalsIgnoreCase("DESC")))
+            throw new IllegalArgumentException("Sort direction must be ASC or DESC");
 
-        List<Permission> permissions = permissionRepository.findAll();
-
-        // Apply keyword filter
-        if (query.keyword() != null && !query.keyword().isBlank()) {
-            String keyword = query.keyword()
-                    .trim()
-                    .toLowerCase(Locale.ROOT);
-
-            permissions = permissions.stream()
-                    .filter(permission ->
-                            permission.getName().value().toLowerCase(Locale.ROOT)
-                                    .contains(keyword)
-                                    || permission.getResource().value()
-                                    .toLowerCase(Locale.ROOT).contains(keyword)
-                                    || permission.getAction().value()
-                                    .toLowerCase(Locale.ROOT).contains(keyword)
-                                    || (permission.getDescription() != null
-                                    && permission.getDescription()
-                                    .toLowerCase(Locale.ROOT).contains(keyword))
-                    )
-                    .toList();
-        }
-
-        // Apply resource filter
-        if (query.resource() != null && !query.resource().isBlank()) {
-            String resource = query.resource()
-                    .trim()
-                    .toLowerCase(Locale.ROOT);
-
-            permissions = permissions.stream()
-                    .filter(permission ->
-                            permission.getResource().value()
-                                    .equalsIgnoreCase(resource))
-                    .toList();
-        }
-
-        // Apply action filter
-        if (query.action() != null && !query.action().isBlank()) {
-            String action = query.action()
-                    .trim()
-                    .toLowerCase(Locale.ROOT);
-
-            permissions = permissions.stream()
-                    .filter(permission ->
-                            permission.getAction().value()
-                                    .equalsIgnoreCase(action))
-                    .toList();
-        }
-
-        // Apply active filter
-        if (query.active() != null) {
-            permissions = permissions.stream()
-                    .filter(permission ->
-                            permission.isActive() == query.active())
-                    .toList();
-        }
-
-        // Apply system permission filter
-        if (query.systemPermission() != null) {
-            permissions = permissions.stream()
-                    .filter(permission ->
-                            permission.isSystem() == query.systemPermission())
-                    .toList();
-        }
-
-        // Apply deleted filter
-        if (query.deleted() == null || !query.deleted()) {
-            permissions = permissions.stream()
-                    .filter(permission -> !permission.isDeleted())
-                    .toList();
-        } else {
-            permissions = permissions.stream()
-                    .filter(Permission::isDeleted)
-                    .toList();
-        }
-
-        // Apply sorting
-        Comparator<Permission> comparator = Comparator.comparing(
-                permission -> permission.getName().value(),
-                String.CASE_INSENSITIVE_ORDER
-        );
-
-        if ("resource".equalsIgnoreCase(query.sortBy())) {
-            comparator = Comparator.comparing(
-                    permission -> permission.getResource().value(),
-                    String.CASE_INSENSITIVE_ORDER
-            );
-        } else if ("action".equalsIgnoreCase(query.sortBy())) {
-            comparator = Comparator.comparing(
-                    permission -> permission.getAction().value(),
-                    String.CASE_INSENSITIVE_ORDER
-            );
-        } else if ("createdAt".equalsIgnoreCase(query.sortBy())) {
-            comparator = Comparator.comparing(
-                    Permission::getCreatedAt,
-                    Comparator.nullsLast(Comparator.naturalOrder())
-            );
-        }
-
-        if ("desc".equalsIgnoreCase(query.sortDirection())) {
-            comparator = comparator.reversed();
-        }
-
-        permissions = permissions.stream()
-                .sorted(comparator)
-                .toList();
-
-        // Calculate pagination
-        int totalElements = permissions.size();
-        int totalPages = (int) Math.ceil(
-                (double) totalElements / query.size()
-        );
-
-        int start = Math.min(
-                query.page() * query.size(),
-                totalElements
-        );
-
-        int end = Math.min(
-                start + query.size(),
-                totalElements
-        );
-
-        List<PermissionResult> content = permissions
-                .subList(start, end)
-                .stream()
-                .map(this::toResult)
-                .toList();
-
-        return new PageResult<>(
-                content,
-                query.page(),
-                query.size(),
-                totalElements,
-                totalPages,
-                query.page() == 0,
-                query.page() >= totalPages - 1
-        );
+        PageResult<Permission> page = permissionRepository.findPage(query);
+        List<PermissionResult> content = page.content().stream().map(this::toResult).toList();
+        return new PageResult<>(content, page.page(), page.size(), page.totalElements(), page.totalPages(), page.first(), page.last());
     }
 
     private PermissionResult toResult(Permission permission) {

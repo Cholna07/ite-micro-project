@@ -5,7 +5,9 @@ import kh.edu.istad.platform.iam.domain.entity.User;
 import kh.edu.istad.platform.iam.domain.port.out.CurrentActorProvider;
 import kh.edu.istad.platform.iam.domain.port.out.PasswordHasher;
 import kh.edu.istad.platform.iam.domain.port.out.UserRepository;
+import kh.edu.istad.platform.iam.domain.entity.AccountActivityEventType;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 @Component
@@ -14,17 +16,21 @@ public class ChangePasswordUseCase {
     private final UserRepository userRepository;
     private final PasswordHasher passwordHasher;
     private final CurrentActorProvider currentActorProvider;
+    private final RecordAccountActivityEventUseCase recordActivity;
 
     public ChangePasswordUseCase(
             UserRepository userRepository,
             PasswordHasher passwordHasher,
-            CurrentActorProvider currentActorProvider
+            CurrentActorProvider currentActorProvider,
+            RecordAccountActivityEventUseCase recordActivity
     ) {
         this.userRepository = userRepository;
         this.passwordHasher = passwordHasher;
         this.currentActorProvider = currentActorProvider;
+        this.recordActivity = recordActivity;
     }
 
+    @Transactional
     public void execute(ChangePasswordCommand command) {
 
         if (command == null) {
@@ -49,5 +55,7 @@ public class ChangePasswordUseCase {
         user.setUpdatedBy(currentActorProvider.getCurrentActor());
 
         userRepository.save(user);
+        recordActivity.execute(user.getUuid(), AccountActivityEventType.PASSWORD_CHANGED,
+                "Password changed");
     }
 }

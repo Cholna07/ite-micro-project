@@ -2,6 +2,7 @@ package kh.edu.istad.platform.iam.domain.usecase.role;
 
 import kh.edu.istad.platform.iam.domain.dto.command.AssignPermissionsToRoleCommand;
 import kh.edu.istad.platform.iam.domain.dto.result.PermissionAssignmentResult;
+import kh.edu.istad.platform.iam.domain.exception.RolePermissionAlreadyAssignedException;
 import kh.edu.istad.platform.iam.domain.entity.Permission;
 import kh.edu.istad.platform.iam.domain.entity.Role;
 import kh.edu.istad.platform.iam.domain.entity.RolePermission;
@@ -10,12 +11,14 @@ import kh.edu.istad.platform.iam.domain.port.out.PermissionRepository;
 import kh.edu.istad.platform.iam.domain.port.out.RolePermissionRepository;
 import kh.edu.istad.platform.iam.domain.port.out.RoleRepository;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.UUID;
+import java.util.Set;
 @Component
 public class AssignPermissionsToRoleUseCase {
 
@@ -36,6 +39,7 @@ public class AssignPermissionsToRoleUseCase {
         this.currentActorProvider = currentActorProvider;
     }
 
+    @Transactional
     public List<PermissionAssignmentResult> execute(
             AssignPermissionsToRoleCommand command
     ) {
@@ -53,11 +57,14 @@ public class AssignPermissionsToRoleUseCase {
             );
         }
 
-        if (new HashSet<>(command.permissionUuids()).size()
-                != command.permissionUuids().size()) {
-            throw new IllegalArgumentException(
-                    "Duplicate permission UUIDs are not allowed"
-            );
+        Set<UUID> seenPermissionUuids = new HashSet<>();
+        for (UUID permissionUuid : command.permissionUuids()) {
+            if (permissionUuid == null) {
+                throw new IllegalArgumentException("Permission UUID cannot be null");
+            }
+            if (!seenPermissionUuids.add(permissionUuid)) {
+                throw new RolePermissionAlreadyAssignedException("Duplicate permission UUIDs are not allowed");
+            }
         }
 
         Role role = roleRepository.findByUuid(command.roleUuid())
@@ -90,7 +97,7 @@ public class AssignPermissionsToRoleUseCase {
 
             if (rolePermissionRepository.existsActiveAssignment(
                     role.getId(), permission.getId())) {
-                throw new IllegalStateException(
+                throw new RolePermissionAlreadyAssignedException(
                         "Permission is already assigned to this role: "
                                 + permissionUuid
                 );
@@ -99,20 +106,21 @@ public class AssignPermissionsToRoleUseCase {
             permissions.add(permission);
         }
 
-        // Save permission assignments
-        List<PermissionAssignmentResult> results = new ArrayList<>();
+        Instant assignedAt = Instant.now();
+        String assignedBy = currentActorProvider.getCurrentActor();
+        for (Permission permission : permissions) {
+            rolePermissionRepository.revokeExpiredAssignments(role.getId(), permission.getId(), assignedAt, assignedBy);
+        }
+
+        // Save permission assignments only after the complete request validates.
+        List<PermissionAssignmentResult> results = new ArrayList<>(permissions.size());
 
         for (Permission permission : permissions) {
-
-            Instant assignedAt = Instant.now();
-
             RolePermission rolePermission = new RolePermission();
             rolePermission.setRoleId(role.getId());
             rolePermission.setPermissionId(permission.getId());
             rolePermission.setAssignedAt(assignedAt);
-            rolePermission.setAssignedBy(
-                    currentActorProvider.getCurrentActor()
-            );
+            rolePermission.setAssignedBy(assignedBy);
             rolePermission.setExpiresAt(command.expiresAt());
             rolePermission.setReason(command.reason());
 

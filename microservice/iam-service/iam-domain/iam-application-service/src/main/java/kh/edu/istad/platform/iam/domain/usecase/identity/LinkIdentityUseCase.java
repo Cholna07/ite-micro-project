@@ -9,7 +9,10 @@ import kh.edu.istad.platform.iam.domain.port.out.UserRepository;
 import kh.edu.istad.platform.iam.domain.valueobject.Email;
 import kh.edu.istad.platform.iam.domain.valueobject.IdentityProvider;
 import kh.edu.istad.platform.iam.domain.valueobject.ProviderSubject;
+import kh.edu.istad.platform.iam.domain.entity.AccountActivityEventType;
+import kh.edu.istad.platform.iam.domain.usecase.user.RecordAccountActivityEventUseCase;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -18,15 +21,19 @@ public class LinkIdentityUseCase {
 
     private final UserRepository userRepository;
     private final IdentityRepository identityRepository;
+    private final RecordAccountActivityEventUseCase recordActivity;
 
     public LinkIdentityUseCase(
             UserRepository userRepository,
-            IdentityRepository identityRepository
+            IdentityRepository identityRepository,
+            RecordAccountActivityEventUseCase recordActivity
     ) {
         this.userRepository = userRepository;
         this.identityRepository = identityRepository;
+        this.recordActivity = recordActivity;
     }
 
+    @Transactional
     public IdentityResult execute(
             UUID userUuid,
             FederatedIdentityCommand command
@@ -55,11 +62,9 @@ public class LinkIdentityUseCase {
 
         if (command.provider() == null || command.provider().isBlank()
                 || command.providerSubject() == null
-                || command.providerSubject().isBlank()
-                || command.email() == null
-                || command.email().isBlank()) {
+                || command.providerSubject().isBlank()) {
             throw new IllegalArgumentException(
-                    "Provider, provider subject, and email are required"
+                    "Provider and provider subject are required"
             );
         }
 
@@ -87,7 +92,8 @@ public class LinkIdentityUseCase {
             );
         }
 
-        String email = command.email().trim().toLowerCase();
+        String email = command.email() == null || command.email().isBlank()
+                ? null : command.email().trim().toLowerCase();
 
         Instant now = Instant.now();
 
@@ -99,7 +105,7 @@ public class LinkIdentityUseCase {
         identity.setProviderSubject(
                 new ProviderSubject(providerSubject)
         );
-        identity.setEmail(new Email(email));
+        identity.setEmail(email == null ? null : new Email(email));
         identity.setEmailVerified(command.emailVerified());
         identity.setUsername(user.getUsername());
         identity.setDisplayName(command.displayName());
@@ -111,12 +117,14 @@ public class LinkIdentityUseCase {
         identity.setCreatedAt(now);
 
         Identity savedIdentity = identityRepository.save(identity);
+        recordActivity.execute(user.getUuid(), AccountActivityEventType.SOCIAL_ACCOUNT_LINKED,
+                "A social account was linked");
 
         return new IdentityResult(
                 savedIdentity.getUuid(),
                 savedIdentity.getProvider().name(),
                 savedIdentity.getProviderSubject().value(),
-                savedIdentity.getEmail().value(),
+                savedIdentity.getEmail() == null ? null : savedIdentity.getEmail().value(),
                 savedIdentity.isEmailVerified(),
                 savedIdentity.getDisplayName(),
                 savedIdentity.getPictureUrl(),

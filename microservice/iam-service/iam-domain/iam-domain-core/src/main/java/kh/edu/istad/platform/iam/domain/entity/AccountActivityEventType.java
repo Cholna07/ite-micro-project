@@ -1,0 +1,14 @@
+package kh.edu.istad.platform.iam.domain.entity;
+
+public enum AccountActivityEventType {
+    PASSWORD_CHANGED,
+    PROFILE_UPDATED,
+    EMAIL_CHANGED,
+    SOCIAL_ACCOUNT_LINKED,
+    SOCIAL_ACCOUNT_UNLINKED,
+    SESSION_REVOKED,
+    CURRENT_SESSION_REVOKED,
+    OTHER_SESSIONS_REVOKED,
+    ACCOUNT_DEACTIVATED,
+    ACCOUNT_LOCKED
+}

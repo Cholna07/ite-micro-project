@@ -2,6 +2,7 @@ package kh.edu.istad.platform.iam.persistence.repository;
 
 import kh.edu.istad.platform.iam.persistence.entity.RolePermissionJpaEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -12,6 +13,23 @@ import java.util.Optional;
 public interface RolePermissionJpaRepository extends JpaRepository<RolePermissionJpaEntity, Long> {
 
     List<RolePermissionJpaEntity> findByRoleId(Long roleId);
+
+    @Modifying
+    @Query("""
+            UPDATE RolePermissionJpaEntity rp
+            SET rp.revokedAt = :now, rp.revokedBy = :actor, rp.reason = 'EXPIRED'
+            WHERE rp.roleId = :roleId
+              AND rp.permissionId = :permissionId
+              AND rp.revokedAt IS NULL
+              AND rp.expiresAt IS NOT NULL
+              AND rp.expiresAt <= :now
+            """)
+    int revokeExpiredAssignments(
+            @Param("roleId") Long roleId,
+            @Param("permissionId") Long permissionId,
+            @Param("now") Instant now,
+            @Param("actor") String actor
+    );
 
     @Query("""
             SELECT rp

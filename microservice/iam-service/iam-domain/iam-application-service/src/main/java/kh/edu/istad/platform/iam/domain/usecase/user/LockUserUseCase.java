@@ -3,6 +3,9 @@ package kh.edu.istad.platform.iam.domain.usecase.user;
 import kh.edu.istad.platform.iam.domain.entity.User;
 import kh.edu.istad.platform.iam.domain.port.out.CurrentActorProvider;
 import kh.edu.istad.platform.iam.domain.port.out.UserRepository;
+import kh.edu.istad.platform.iam.domain.port.out.UserSessionRepository;
+import kh.edu.istad.platform.iam.domain.entity.AccountActivityEventType;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -12,15 +15,22 @@ public class LockUserUseCase {
 
     private final UserRepository userRepository;
     private final CurrentActorProvider currentActorProvider;
+    private final UserSessionRepository userSessionRepository;
+    private final RecordAccountActivityEventUseCase recordActivity;
 
     public LockUserUseCase(
             UserRepository userRepository,
-            CurrentActorProvider currentActorProvider
+            CurrentActorProvider currentActorProvider,
+            UserSessionRepository userSessionRepository,
+            RecordAccountActivityEventUseCase recordActivity
     ) {
         this.userRepository = userRepository;
         this.currentActorProvider = currentActorProvider;
+        this.userSessionRepository = userSessionRepository;
+        this.recordActivity = recordActivity;
     }
 
+    @Transactional
     public void execute(UUID userUuid) {
 
         if (userUuid == null) {
@@ -36,5 +46,8 @@ public class LockUserUseCase {
         user.setUpdatedBy(currentActorProvider.getCurrentActor());
 
         userRepository.save(user);
+        userSessionRepository.revokeAll(userUuid, null, Instant.now(), "ACCOUNT_LOCKED");
+        recordActivity.execute(userUuid, AccountActivityEventType.ACCOUNT_LOCKED,
+                "Account locked; all active sessions were revoked");
     }
 }

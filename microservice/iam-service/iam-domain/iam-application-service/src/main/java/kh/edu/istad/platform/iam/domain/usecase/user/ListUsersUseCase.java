@@ -3,11 +3,10 @@ package kh.edu.istad.platform.iam.domain.usecase.user;
 import kh.edu.istad.platform.iam.domain.dto.query.UserFilterQuery;
 import kh.edu.istad.platform.iam.domain.dto.result.PageResult;
 import kh.edu.istad.platform.iam.domain.dto.result.UserSummary;
-import kh.edu.istad.platform.iam.domain.entity.User;
 import kh.edu.istad.platform.iam.domain.port.out.UserRepository;
 import org.springframework.stereotype.Component;
-
 import java.util.List;
+
 @Component
 public class ListUsersUseCase {
 
@@ -25,9 +24,12 @@ public class ListUsersUseCase {
             );
         }
 
-        List<User> users = userRepository.findAll(query);
+        if (query.page() < 0) throw new IllegalArgumentException("Page index cannot be negative");
+        if (query.size() < 1 || query.size() > 100) throw new IllegalArgumentException("Page size must be between 1 and 100");
 
-        List<UserSummary> content = users.stream()
+        PageResult<kh.edu.istad.platform.iam.domain.entity.User> users = userRepository.findAll(query);
+
+        List<UserSummary> content = users.content().stream()
                 .map(user -> new UserSummary(
                         user.getUuid(),
                         user.getUsername().value(),
@@ -39,14 +41,7 @@ public class ListUsersUseCase {
                 ))
                 .toList();
 
-        return new PageResult<>(
-                content,
-                query.page(),
-                query.size(),
-                content.size(),
-                1,
-                query.page() == 0,
-                true
-        );
+        return new PageResult<>(content, users.page(), users.size(), users.totalElements(), users.totalPages(),
+                users.first(), users.last());
     }
 }

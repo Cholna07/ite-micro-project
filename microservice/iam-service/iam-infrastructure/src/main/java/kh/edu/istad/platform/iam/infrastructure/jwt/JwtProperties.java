@@ -11,6 +11,14 @@ public class JwtProperties {
 
     private String secret;
 
+    private String keyStorePath;
+
+    private String keyStorePassword;
+
+    private String keyAlias;
+
+    private String keyPassword;
+
     private Duration accessTokenExpiration = Duration.ofMinutes(15);
 
     public String getIssuer() {
@@ -28,6 +36,22 @@ public class JwtProperties {
     public void setSecret(String secret) {
         this.secret = secret;
     }
+
+    public String getKeyStorePath() { return keyStorePath; }
+
+    public void setKeyStorePath(String keyStorePath) { this.keyStorePath = keyStorePath; }
+
+    public String getKeyStorePassword() { return keyStorePassword; }
+
+    public void setKeyStorePassword(String keyStorePassword) { this.keyStorePassword = keyStorePassword; }
+
+    public String getKeyAlias() { return keyAlias; }
+
+    public void setKeyAlias(String keyAlias) { this.keyAlias = keyAlias; }
+
+    public String getKeyPassword() { return keyPassword; }
+
+    public void setKeyPassword(String keyPassword) { this.keyPassword = keyPassword; }
 
     public Duration getAccessTokenExpiration() {
         return accessTokenExpiration;

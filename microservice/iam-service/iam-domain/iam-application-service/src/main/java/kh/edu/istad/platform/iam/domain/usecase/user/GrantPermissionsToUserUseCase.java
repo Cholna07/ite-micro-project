@@ -2,6 +2,7 @@ package kh.edu.istad.platform.iam.domain.usecase.user;
 
 import kh.edu.istad.platform.iam.domain.dto.command.GrantPermissionsToUserCommand;
 import kh.edu.istad.platform.iam.domain.dto.result.PermissionGrantResult;
+import kh.edu.istad.platform.iam.domain.exception.PermissionAlreadyAssignedException;
 import kh.edu.istad.platform.iam.domain.entity.Permission;
 import kh.edu.istad.platform.iam.domain.entity.User;
 import kh.edu.istad.platform.iam.domain.entity.UserPermission;
@@ -11,6 +12,7 @@ import kh.edu.istad.platform.iam.domain.port.out.UserPermissionRepository;
 import kh.edu.istad.platform.iam.domain.port.out.UserRepository;
 import kh.edu.istad.platform.iam.domain.valueobject.PermissionEffect;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -18,6 +20,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.Set;
 @Component
 public class GrantPermissionsToUserUseCase {
 
@@ -38,6 +41,7 @@ public class GrantPermissionsToUserUseCase {
         this.currentActorProvider = currentActorProvider;
     }
 
+    @Transactional
     public List<PermissionGrantResult> execute(
             GrantPermissionsToUserCommand command
     ) {
@@ -50,9 +54,14 @@ public class GrantPermissionsToUserUseCase {
             throw new IllegalArgumentException("At least one permission is required");
         }
 
-        if (new HashSet<>(command.permissionUuids()).size()
-                != command.permissionUuids().size()) {
-            throw new IllegalArgumentException("Duplicate permission UUIDs are not allowed");
+        Set<UUID> uniquePermissionUuids = new HashSet<>();
+        for (UUID permissionUuid : command.permissionUuids()) {
+            if (permissionUuid == null) {
+                throw new IllegalArgumentException("Permission UUID cannot be null");
+            }
+            if (!uniquePermissionUuids.add(permissionUuid)) {
+                throw new PermissionAlreadyAssignedException("Duplicate permission UUIDs are not allowed");
+            }
         }
 
         User user = userRepository.findByUuid(command.userUuid())
@@ -71,7 +80,7 @@ public class GrantPermissionsToUserUseCase {
             throw new IllegalArgumentException("Invalid permission effect", exception);
         }
 
-        List<PermissionGrantResult> results = new ArrayList<>();
+        List<Permission> permissionsToAssign = new ArrayList<>(command.permissionUuids().size());
 
         for (UUID permissionUuid : command.permissionUuids()) {
 
@@ -88,20 +97,34 @@ public class GrantPermissionsToUserUseCase {
 
             if (userPermissionRepository.existsActiveAssignment(
                     user.getId(), permission.getId())) {
-                throw new IllegalStateException(
+                throw new PermissionAlreadyAssignedException(
                         "User already has an active assignment for permission: "
                                 + permissionUuid
                 );
             }
 
-            Instant assignedAt = Instant.now();
+            permissionsToAssign.add(permission);
+        }
+
+        Instant assignedAt = Instant.now();
+        String assignedBy = currentActorProvider.getCurrentActor();
+
+        // Expired, unrevoked rows otherwise occupy the partial unique index. Mark
+        // them revoked without deleting history before inserting replacements.
+        for (Permission permission : permissionsToAssign) {
+            userPermissionRepository.revokeExpiredAssignments(
+                    user.getId(), permission.getId(), assignedAt, assignedBy);
+        }
+
+        List<PermissionGrantResult> results = new ArrayList<>(permissionsToAssign.size());
+        for (Permission permission : permissionsToAssign) {
 
             UserPermission userPermission = new UserPermission();
             userPermission.setUserId(user.getId());
             userPermission.setPermissionId(permission.getId());
             userPermission.setEffect(effect);
             userPermission.setAssignedAt(assignedAt);
-            userPermission.setAssignedBy(currentActorProvider.getCurrentActor());
+            userPermission.setAssignedBy(assignedBy);
             userPermission.setExpiresAt(command.expiresAt());
             userPermission.setReason(command.reason());
 

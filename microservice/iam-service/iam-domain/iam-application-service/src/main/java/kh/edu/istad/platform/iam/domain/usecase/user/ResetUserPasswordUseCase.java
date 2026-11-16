@@ -2,10 +2,12 @@ package kh.edu.istad.platform.iam.domain.usecase.user;
 
 import kh.edu.istad.platform.iam.domain.dto.command.ResetUserPasswordCommand;
 import kh.edu.istad.platform.iam.domain.entity.User;
+import kh.edu.istad.platform.iam.domain.entity.AccountActivityEventType;
 import kh.edu.istad.platform.iam.domain.port.out.CurrentActorProvider;
 import kh.edu.istad.platform.iam.domain.port.out.PasswordHasher;
 import kh.edu.istad.platform.iam.domain.port.out.UserRepository;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 @Component
@@ -14,17 +16,21 @@ public class ResetUserPasswordUseCase {
     private final UserRepository userRepository;
     private final PasswordHasher passwordHasher;
     private final CurrentActorProvider currentActorProvider;
+    private final RecordAccountActivityEventUseCase recordActivity;
 
     public ResetUserPasswordUseCase(
             UserRepository userRepository,
             PasswordHasher passwordHasher,
-            CurrentActorProvider currentActorProvider
+            CurrentActorProvider currentActorProvider,
+            RecordAccountActivityEventUseCase recordActivity
     ) {
         this.userRepository = userRepository;
         this.passwordHasher = passwordHasher;
         this.currentActorProvider = currentActorProvider;
+        this.recordActivity = recordActivity;
     }
 
+    @Transactional
     public void execute(ResetUserPasswordCommand command) {
 
         if (command == null) {
@@ -45,5 +51,7 @@ public class ResetUserPasswordUseCase {
         user.setUpdatedBy(currentActorProvider.getCurrentActor());
 
         userRepository.save(user);
+        recordActivity.execute(user.getUuid(), AccountActivityEventType.PASSWORD_CHANGED,
+                "Password reset by an administrator");
     }
 }

@@ -31,7 +31,7 @@ public class RegistrationController {
         model.addAttribute("errors", List.of());
         model.addAttribute("csrfToken", csrf == null ? "" : csrf.getToken());
         model.addAttribute("csrfParameter", csrf == null ? "_csrf" : csrf.getParameterName());
-        return "register";
+        return "forward:/frontend/index.html";
     }
 
     @PostMapping("/register")
@@ -49,7 +49,7 @@ public class RegistrationController {
         if (!java.util.Objects.equals(password, confirmPassword)) errors.add(messages.getMessage("validation.passwordMismatch", null, locale));
         if (!errors.isEmpty()) {
             setFormModel(model, csrf, errors);
-            return "register";
+            return "forward:/frontend/index.html";
         }
         try {
             registerUser.execute(new RegisterUserCommand(username.trim(), email.trim(), password, null, null));
@@ -58,10 +58,10 @@ public class RegistrationController {
             String key = exception.getMessage() != null && exception.getMessage().toLowerCase(Locale.ROOT).contains("email")
                     ? "validation.emailTaken" : "validation.usernameTaken";
             setFormModel(model, csrf, List.of(messages.getMessage(key, null, locale)));
-            return "register";
+            return "forward:/frontend/index.html";
         } catch (IllegalArgumentException exception) {
             setFormModel(model, csrf, List.of(messages.getMessage("validation.registrationFailed", null, locale)));
-            return "register";
+            return "forward:/frontend/index.html";
         }
     }
 

@@ -26,7 +26,12 @@ public class UserRestMapper {
                 user.isEnabled(),
                 !user.isAccountNonLocked(),
                 user.getCreatedAt(),
-                user.getUpdatedAt()
+                user.getUpdatedAt(),
+                user.getPictureUrl(),
+                user.getMiddleName(),
+                user.getNickname(),
+                user.isEmailVerified(),
+                user.isPhoneNumberVerified()
         );
     }
 

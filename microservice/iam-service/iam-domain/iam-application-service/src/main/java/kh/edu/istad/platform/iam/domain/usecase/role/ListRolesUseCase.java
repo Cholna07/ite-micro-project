@@ -3,11 +3,11 @@ package kh.edu.istad.platform.iam.domain.usecase.role;
 import kh.edu.istad.platform.iam.domain.dto.query.RoleFilterQuery;
 import kh.edu.istad.platform.iam.domain.dto.result.PageResult;
 import kh.edu.istad.platform.iam.domain.dto.result.RoleSummary;
-import kh.edu.istad.platform.iam.domain.entity.Role;
 import kh.edu.istad.platform.iam.domain.port.out.RoleRepository;
 import org.springframework.stereotype.Component;
 
-import java.util.List;
+import java.util.Map;
+import java.util.Set;
 @Component
 public class ListRolesUseCase {
 
@@ -23,31 +23,20 @@ public class ListRolesUseCase {
             throw new IllegalArgumentException("Role filter query is required");
         }
 
-        List<Role> filteredRoles = roleRepository.findAll()
-                .stream()
-                .filter(role -> !role.isDeleted() ||
-                        Boolean.TRUE.equals(query.deleted()))
-                .filter(role -> query.keyword() == null
-                        || query.keyword().isBlank()
-                        || role.getName().value().toLowerCase()
-                        .contains(query.keyword().trim().toLowerCase())
-                        || (role.getDescription() != null
-                        && role.getDescription().toLowerCase()
-                        .contains(query.keyword().trim().toLowerCase())))
-                .filter(role -> query.active() == null
-                        || role.isActive() == query.active())
-                .filter(role -> query.systemRole() == null
-                        || role.isSystem() == query.systemRole())
-                .toList();
+        if (query.page() < 0 || query.size() < 1 || query.size() > 100) {
+            throw new IllegalArgumentException("Page must be non-negative and size must be between 1 and 100");
+        }
+        Set<String> sortFields = Set.of("name", "description", "createdAt", "updatedAt", "active", "systemRole");
+        if (query.sortBy() == null || !sortFields.contains(query.sortBy())) {
+            throw new IllegalArgumentException("Unsupported role sort field");
+        }
+        if (query.sortDirection() == null || !(query.sortDirection().equalsIgnoreCase("ASC")
+                || query.sortDirection().equalsIgnoreCase("DESC"))) {
+            throw new IllegalArgumentException("Sort direction must be ASC or DESC");
+        }
 
-        int page = Math.max(query.page(), 0);
-        int size = query.size() <= 0 ? 10 : query.size();
-
-        int fromIndex = Math.min(page * size, filteredRoles.size());
-        int toIndex = Math.min(fromIndex + size, filteredRoles.size());
-
-        List<RoleSummary> content = filteredRoles
-                .subList(fromIndex, toIndex)
+        var page = roleRepository.findPage(query);
+        var content = page.content()
                 .stream()
                 .map(role -> new RoleSummary(
                         role.getUuid(),
@@ -58,17 +47,14 @@ public class ListRolesUseCase {
                 ))
                 .toList();
 
-        long totalElements = filteredRoles.size();
-        int totalPages = (int) Math.ceil((double) totalElements / size);
-
         return new PageResult<>(
                 content,
-                page,
-                size,
-                totalElements,
-                totalPages,
-                page == 0,
-                page >= totalPages - 1
+                page.page(),
+                page.size(),
+                page.totalElements(),
+                page.totalPages(),
+                page.first(),
+                page.last()
         );
     }
 }
