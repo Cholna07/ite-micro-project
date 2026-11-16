@@ -31,7 +31,7 @@ public class ListUsersUseCase {
                 .map(user -> new UserSummary(
                         user.getUuid(),
                         user.getUsername().value(),
-                        user.getEmail().value(),
+                        user.getEmail() == null ? null : user.getEmail().value(),
                         user.getGivenName(),
                         user.getFamilyName(),
                         user.isEnabled(),

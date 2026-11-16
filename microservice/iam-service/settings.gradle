@@ -5,23 +5,29 @@ pluginManagement {
         gradlePluginPortal()
         mavenCentral()
     }
+
+    plugins {
+        id 'org.springframework.boot' version '4.1.1'
+        id 'io.spring.dependency-management' version '1.1.7'
+    }
 }
+
 dependencyResolutionManagement {
     repositories {
         mavenCentral()
     }
+
     versionCatalogs {
         libs {
-            from(
-                    files("../../gradle/libs.versions.toml")
-            )
+            from(files("../../gradle/libs.versions.toml"))
         }
     }
 }
+
 rootProject.name = 'iam-service'
 
-include'iam-main'
-include'iam-domain'
+include 'iam-main'
+include 'iam-domain'
 include 'iam-domain:iam-domain-core'
 include 'iam-domain:iam-application-service'
 include 'iam-rest-api'

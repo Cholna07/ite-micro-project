@@ -29,7 +29,7 @@ public class GetUserUseCase {
         return new UserResult(
                 user.getUuid(),
                 user.getUsername().value(),
-                user.getEmail().value(),
+                user.getEmail() == null ? null : user.getEmail().value(),
                 user.getGivenName(),
                 user.getFamilyName(),
                 user.getMiddleName(),

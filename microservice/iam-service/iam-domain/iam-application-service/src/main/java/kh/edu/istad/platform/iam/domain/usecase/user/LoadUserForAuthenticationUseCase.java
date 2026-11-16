@@ -44,7 +44,7 @@ public class LoadUserForAuthenticationUseCase {
         return new AuthUserResult(
                 user.getUuid(),
                 user.getUsername().value(),
-                user.getEmail().value(),
+                user.getEmail() == null ? null : user.getEmail().value(),
                 user.getPasswordHash(),
                 user.isEnabled(),
                 !user.isAccountNonLocked(),

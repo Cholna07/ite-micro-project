@@ -54,7 +54,7 @@ public class ListUserIdentitiesUseCase {
                 identity.getUuid(),
                 identity.getProvider().name(),
                 identity.getProviderSubject().value(),
-                identity.getEmail().value(),
+                identity.getEmail() == null ? null : identity.getEmail().value(),
                 identity.isEmailVerified(),
                 identity.getDisplayName(),
                 identity.getPictureUrl(),

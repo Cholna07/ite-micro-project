@@ -2,15 +2,20 @@ iam:
   security:
     jwt:
       issuer: cholna-iam
-      secret: ${IAM_JWT_SECRET}
+      secret: ${IAM_JWT_SECRET:local-development-only-change-me-32-bytes-minimum}
       access-token-expiration: 15m
 
   oauth2:
     registration:
-      client-id: ${IAM_REGISTRATION_CLIENT_ID:iam-registration-client}
-      client-secret: ${IAM_REGISTRATION_CLIENT_SECRET}
+      client-id: ${IAM_REGISTRATION_CLIENT_ID:local-registration-client}
+      client-secret: ${IAM_REGISTRATION_CLIENT_SECRET:local-registration-secret}
 
 spring:
+  messages:
+    basename: messages
+    encoding: UTF-8
+    fallback-to-system-locale: false
+
   application:
     name: iam-service
 
@@ -63,6 +68,7 @@ spring:
               - email
 
           telegram:
+            client-name: Telegram
             client-id: ${TELEGRAM_CLIENT_ID}
             client-secret: ${TELEGRAM_CLIENT_SECRET}
             authorization-grant-type: authorization_code
@@ -70,7 +76,6 @@ spring:
             scope:
               - openid
               - profile
-              - phone
 
         provider:
           facebook:
@@ -88,3 +93,7 @@ logging:
     org.springframework.security.oauth2.client: TRACE
     org.springframework.security.oauth2.core: DEBUG
     org.springframework.security.oauth2.client.web.HttpSessionOAuth2AuthorizationRequestRepository: TRACE
+
+server:
+  # Keep IAM separate from the other local services; override with IAM_SERVER_PORT when needed.
+  port: ${IAM_SERVER_PORT:9191}

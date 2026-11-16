@@ -16,8 +16,10 @@ public class OidcClaimMapper {
 
         claims.put("sub", user.getUuid().toString());
         claims.put("preferred_username", user.getUsername().value());
-        claims.put("email", user.getEmail().value());
-        claims.put("email_verified", user.isEmailVerified());
+        if (user.getEmail() != null) {
+            claims.put("email", user.getEmail().value());
+            claims.put("email_verified", user.isEmailVerified());
+        }
 
         addIfPresent(claims, "given_name", user.getGivenName());
         addIfPresent(claims, "family_name", user.getFamilyName());

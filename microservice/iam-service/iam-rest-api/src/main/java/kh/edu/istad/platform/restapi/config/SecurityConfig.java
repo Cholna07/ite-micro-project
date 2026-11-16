@@ -1,3 +1,4 @@
+
 package kh.edu.istad.platform.restapi.config;
 
 import lombok.RequiredArgsConstructor;
@@ -23,6 +24,7 @@ public class SecurityConfig {
             throws Exception {
 
         http
+                .securityMatcher("/api/**", "/connect/**")
                 .csrf(AbstractHttpConfigurer::disable)
 
                 .sessionManagement(session -> session
@@ -31,17 +33,14 @@ public class SecurityConfig {
 
                 .authorizeHttpRequests(auth -> auth
 
-                        // Public homepage and error page
-                        .requestMatchers("/", "/error").permitAll()
-
-                        // Public registration and login
+                        // Public registration and login API
                         .requestMatchers(
                                 HttpMethod.POST,
                                 "/api/auth/register",
                                 "/api/auth/login"
                         ).permitAll()
 
-                        // DCR GET: controller validates the registration access token
+                        // DCR GET: controller validates registration access token
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/connect/register"
@@ -64,8 +63,8 @@ public class SecurityConfig {
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .bearerTokenResolver(request -> {
 
-                            // Registration GET uses an opaque registration access token,
-                            // not a JWT.
+                            // Registration GET uses an opaque registration
+                            // access token, not a JWT.
                             if ("GET".equals(request.getMethod())
                                     && "/connect/register".equals(request.getServletPath())) {
                                 return null;

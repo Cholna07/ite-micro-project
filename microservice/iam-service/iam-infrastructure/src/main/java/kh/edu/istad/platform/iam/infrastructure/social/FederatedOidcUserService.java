@@ -33,15 +33,26 @@ public class FederatedOidcUserService extends OidcUserService {
 
     @Override
     public OidcUser loadUser(OidcUserRequest userRequest) {
-
-        // 1. Load OIDC user information
-        OidcUser oidcUser = super.loadUser(userRequest);
-
-        Map<String, Object> attributes = oidcUser.getAttributes();
-
-        // 2. Extract provider information
         String provider = userRequest.getClientRegistration()
                 .getRegistrationId();
+
+        // Telegram returns profile claims in its ID token and has no UserInfo endpoint.
+        OidcUser oidcUser;
+        if ("telegram".equalsIgnoreCase(provider)) {
+            List<GrantedAuthority> tokenAuthorities = userRequest.getAccessToken()
+                    .getScopes().stream()
+                    .<GrantedAuthority>map(scope -> new SimpleGrantedAuthority("SCOPE_" + scope))
+                    .toList();
+            oidcUser = new DefaultOidcUser(
+                    tokenAuthorities,
+                    userRequest.getIdToken(),
+                    "sub"
+            );
+        } else {
+            oidcUser = super.loadUser(userRequest);
+        }
+
+        Map<String, Object> attributes = oidcUser.getAttributes();
 
         String providerSubject = oidcUser.getSubject();
 
@@ -78,7 +89,7 @@ public class FederatedOidcUserService extends OidcUserService {
             }
         }
 
-        // 3. Create federated identity command
+        // 3. Create federated identity command. Telegram does not return email.
         FederatedIdentityCommand command =
                 new FederatedIdentityCommand(
                         provider,
@@ -116,11 +127,12 @@ public class FederatedOidcUserService extends OidcUserService {
                 .forEach(authorities::add);
 
         // 7. Return authenticated OIDC principal
-        return new DefaultOidcUser(
+        OidcUser authenticatedUser = new DefaultOidcUser(
                 authorities,
                 oidcUser.getIdToken(),
                 oidcUser.getUserInfo(),
                 "sub"
         );
+        return new IamOidcUser(authenticatedUser, authUser.username());
     }
 }

@@ -101,7 +101,7 @@ public class UpdateUserProfileUseCase {
         return new UserResult(
                 savedUser.getUuid(),
                 savedUser.getUsername().value(),
-                savedUser.getEmail().value(),
+                savedUser.getEmail() == null ? null : savedUser.getEmail().value(),
                 savedUser.getGivenName(),
                 savedUser.getFamilyName(),
                 savedUser.getMiddleName(),

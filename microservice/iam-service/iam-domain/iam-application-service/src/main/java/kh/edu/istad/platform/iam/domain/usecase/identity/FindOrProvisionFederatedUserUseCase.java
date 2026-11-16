@@ -66,12 +66,6 @@ public class FindOrProvisionFederatedUserUseCase {
             );
         }
 
-        if (command.email() == null || command.email().isBlank()) {
-            throw new IllegalArgumentException(
-                    "Email is required"
-            );
-        }
-
         IdentityProvider provider;
 
         try {
@@ -86,7 +80,8 @@ public class FindOrProvisionFederatedUserUseCase {
         }
 
         String providerSubject = command.providerSubject().trim();
-        String email = command.email().trim().toLowerCase();
+        String email = command.email() == null || command.email().isBlank()
+                ? null : command.email().trim().toLowerCase();
 
         Instant now = Instant.now();
 
@@ -129,7 +124,7 @@ public class FindOrProvisionFederatedUserUseCase {
         } else {
 
             // 2. Check whether a local user already uses this email.
-            user = userRepository.findByEmail(email).orElse(null);
+            user = email == null ? null : userRepository.findByEmail(email).orElse(null);
 
             if (user == null) {
 
@@ -137,7 +132,9 @@ public class FindOrProvisionFederatedUserUseCase {
                 String username = command.username();
 
                 if (username == null || username.isBlank()) {
-                    username = email.substring(0, email.indexOf('@'));
+                    username = email != null
+                            ? email.substring(0, email.indexOf('@'))
+                            : provider.name().toLowerCase() + "_" + providerSubject;
                 }
 
                 String baseUsername = username.trim();
@@ -170,7 +167,7 @@ public class FindOrProvisionFederatedUserUseCase {
 
                 // Never automatically link an unverified provider email
                 // to an existing local account.
-                if (!command.emailVerified()) {
+                if (email == null || !command.emailVerified()) {
                     throw new IllegalStateException(
                             "Email must be verified before linking "
                                     + "a federated identity to an existing account"
@@ -194,7 +191,7 @@ public class FindOrProvisionFederatedUserUseCase {
             identity.setProviderSubject(
                     new ProviderSubject(providerSubject)
             );
-            identity.setEmail(new Email(email));
+            identity.setEmail(email == null ? null : new Email(email));
             identity.setEmailVerified(command.emailVerified());
             identity.setUsername(user.getUsername());
             identity.setDisplayName(command.displayName());
@@ -246,7 +243,7 @@ public class FindOrProvisionFederatedUserUseCase {
         return new AuthUserResult(
                 user.getUuid(),
                 user.getUsername().value(),
-                user.getEmail().value(),
+                user.getEmail() == null ? null : user.getEmail().value(),
                 user.getPasswordHash(),
                 user.isEnabled(),
                 !user.isAccountNonLocked(),

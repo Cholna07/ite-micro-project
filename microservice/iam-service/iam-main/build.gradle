@@ -1,19 +1,26 @@
 plugins {
     id 'spring-boot-common-conventions'
+    id 'org.springframework.boot'
 }
 
+group = 'kh.edu.istad'
+version = '1.0.0'
+
 dependencies {
-    implementation 'kh.edu.istad:iam-domain-core'
-    implementation 'kh.edu.istad:iam-application-service'
-    implementation 'kh.edu.istad:iam-persistence'
-    implementation 'kh.edu.istad:iam-infrastructure'
-    implementation 'kh.edu.istad:iam-rest-api'
-    implementation 'kh.edu.istad:iam-web'
+    // Domain
+    implementation project(':iam-domain:iam-domain-core')
+    implementation project(':iam-domain:iam-application-service')
 
+    // Other modules
+    implementation project(':iam-persistence')
+    implementation project(':iam-infrastructure')
+    implementation project(':iam-rest-api')
+    implementation project(':iam-web')
+
+    // Spring Boot
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
-    implementation 'org.springframework.boot:spring-boot-starter-security'
-    implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
-    implementation 'org.springframework.boot:spring-boot-starter-liquibase'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
 
+    // Database
     runtimeOnly 'org.postgresql:postgresql'
 }

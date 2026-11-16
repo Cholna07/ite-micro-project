@@ -53,6 +53,7 @@ public class AuthorizationServerConfig {
                                                 userInfo.userInfoMapper(oidcInfoService)
                                         )
                                 )
+                                .authorizationEndpoint(endpoint -> endpoint.consentPage("/oauth2/consent"))
                 )
                 .authenticationProvider(authenticationProvider)
                 .authorizeHttpRequests(authorize ->

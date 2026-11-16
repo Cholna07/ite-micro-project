@@ -181,10 +181,11 @@ public class FederatedOAuth2UserService extends DefaultOAuth2UserService {
                 .forEach(authorities::add);
 
         // 10. Return authenticated OAuth2 principal
-        return new DefaultOAuth2User(
+        OAuth2User authenticatedUser = new DefaultOAuth2User(
                 authorities,
                 attributes,
                 "id"
         );
+        return new IamOAuth2User(authenticatedUser, authUser.username());
     }
 }

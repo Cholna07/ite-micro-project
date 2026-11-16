@@ -12,7 +12,7 @@ public class UserRestMapper {
         return new UserResponse(
                 user.getUuid(),
                 user.getUsername().value(),
-                user.getEmail().value(),
+                user.getEmail() == null ? null : user.getEmail().value(),
                 user.getGivenName(),
                 user.getFamilyName(),
                 user.getGender(),
