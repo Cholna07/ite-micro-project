@@ -9,6 +9,7 @@ import kh.edu.istad.platform.iam.domain.dto.result.UserResult;
 import kh.edu.istad.platform.iam.domain.usecase.identity.ListUserIdentitiesUseCase;
 import kh.edu.istad.platform.iam.domain.usecase.identity.UnlinkIdentityUseCase;
 import kh.edu.istad.platform.iam.domain.usecase.user.ChangePasswordUseCase;
+import kh.edu.istad.platform.iam.domain.usecase.config.PasswordPolicyViolationException;
 import kh.edu.istad.platform.iam.domain.usecase.user.GetUserAuthoritiesUseCase;
 import kh.edu.istad.platform.iam.domain.usecase.user.GetUserUseCase;
 import kh.edu.istad.platform.iam.domain.usecase.user.LoadUserForAuthenticationUseCase;
@@ -95,6 +96,10 @@ public class ProfileController {
         if (errors.isEmpty()) {
             try { changePassword.execute(new ChangePasswordCommand(account(authentication).uuid(), currentPassword, newPassword));
                 model.addAttribute("saved", true);
+            } catch (PasswordPolicyViolationException exception) {
+                String key = exception.tooLong() ? "validation.passwordMaximumLength" : "validation.passwordMinimumLength";
+                Object[] args = exception.tooLong() ? new Object[]{exception.maximumLength()} : new Object[]{exception.minimumLength()};
+                errors.add(messages.getMessage(key, args, locale));
             } catch (IllegalArgumentException exception) { errors.add(messages.getMessage("password.changeFailed", null, locale)); }
         }
         model.addAttribute("errors", errors); csrf(model, csrf); return "forward:/frontend/index.html";

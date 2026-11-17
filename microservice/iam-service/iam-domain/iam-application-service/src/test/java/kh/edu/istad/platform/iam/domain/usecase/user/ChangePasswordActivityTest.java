@@ -7,6 +7,7 @@ import kh.edu.istad.platform.iam.domain.port.out.PasswordHasher;
 import kh.edu.istad.platform.iam.domain.port.out.UserRepository;
 import kh.edu.istad.platform.iam.domain.entity.AccountActivityEventType;
 import kh.edu.istad.platform.iam.domain.valueobject.Username;
+import kh.edu.istad.platform.iam.domain.usecase.config.PasswordPolicy;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -25,6 +26,7 @@ class ChangePasswordActivityTest {
     @Mock PasswordHasher passwordHasher;
     @Mock CurrentActorProvider actor;
     @Mock RecordAccountActivityEventUseCase activity;
+    @Mock PasswordPolicy passwordPolicy;
 
     @Test
     void recordsOnlyAfterPasswordChangeIsSaved() {
@@ -36,7 +38,7 @@ class ChangePasswordActivityTest {
         when(actor.getCurrentActor()).thenReturn(userUuid.toString());
         when(users.save(user)).thenReturn(user);
 
-        new ChangePasswordUseCase(users, passwordHasher, actor, activity)
+        new ChangePasswordUseCase(users, passwordHasher, actor, activity, passwordPolicy)
                 .execute(new ChangePasswordCommand(userUuid, "old", "new"));
 
         verify(users).save(user);
@@ -49,7 +51,7 @@ class ChangePasswordActivityTest {
         when(users.findByUuid(userUuid)).thenReturn(Optional.of(user(userUuid)));
         when(passwordHasher.matches("wrong", "old-hash")).thenReturn(false);
 
-        assertThrows(IllegalArgumentException.class, () -> new ChangePasswordUseCase(users, passwordHasher, actor, activity)
+        assertThrows(IllegalArgumentException.class, () -> new ChangePasswordUseCase(users, passwordHasher, actor, activity, passwordPolicy)
                 .execute(new ChangePasswordCommand(userUuid, "wrong", "new")));
 
         verify(users, never()).save(any());

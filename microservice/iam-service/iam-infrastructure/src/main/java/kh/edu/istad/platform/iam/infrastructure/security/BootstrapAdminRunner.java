@@ -48,7 +48,10 @@ public class BootstrapAdminRunner implements ApplicationRunner {
             new AdminPermission("client.create", "client", "create"),
             new AdminPermission("client.read", "client", "read"),
             new AdminPermission("client.manage", "client", "manage"),
-            new AdminPermission("activity.read", "activity", "read")
+            new AdminPermission("activity.read", "activity", "read"),
+            new AdminPermission("audit.read", "audit", "read"),
+            new AdminPermission("system.config.read", "system.config", "read"),
+            new AdminPermission("system.config.manage", "system.config", "manage")
     );
 
     private final String bootstrapUsername;

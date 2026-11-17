@@ -8,15 +8,18 @@ import kh.edu.istad.platform.iam.persistence.mapper.UserPersistenceMapper;
 import kh.edu.istad.platform.iam.persistence.repository.UserJpaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.domain.Specification;
 import kh.edu.istad.platform.iam.domain.dto.result.PageResult;
+import kh.edu.istad.platform.iam.domain.dto.result.LoginAttemptUpdate;
 import jakarta.persistence.criteria.Predicate;
 
 import java.time.Instant;
+import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Locale;
 import java.util.Map;
@@ -30,6 +33,7 @@ public class UserRepositoryAdapter implements UserRepository {
 
     private final UserJpaRepository userJpaRepository;
     private final UserPersistenceMapper userPersistenceMapper;
+    private final JdbcTemplate jdbc;
 
     @Override
     @Transactional(readOnly = true)
@@ -165,6 +169,28 @@ public class UserRepositoryAdapter implements UserRepository {
         UserJpaEntity savedEntity = userJpaRepository.save(entity);
 
         return userPersistenceMapper.toDomain(savedEntity);
+    }
+
+    @Override
+    public LoginAttemptUpdate recordFailedLoginAttempt(UUID userUuid, int lockoutThreshold) {
+        int changed = jdbc.update("UPDATE users SET failed_login_attempts = failed_login_attempts + 1, "
+                        + "account_non_locked = CASE WHEN failed_login_attempts + 1 >= ? THEN FALSE ELSE account_non_locked END, "
+                        + "updated_at = CURRENT_TIMESTAMP WHERE uuid = ? AND account_non_locked = TRUE "
+                        + "AND enabled = TRUE AND is_deleted = FALSE",
+                lockoutThreshold, userUuid);
+        return jdbc.query("SELECT failed_login_attempts, account_non_locked FROM users WHERE uuid = ?",
+                rs -> rs.next() ? new LoginAttemptUpdate(rs.getInt("failed_login_attempts"),
+                        !rs.getBoolean("account_non_locked"), changed > 0
+                        && rs.getInt("failed_login_attempts") == lockoutThreshold)
+                        : new LoginAttemptUpdate(0, true, false), userUuid);
+    }
+
+    @Override
+    public boolean recordSuccessfulLogin(UUID userUuid, Instant lastLoginAt) {
+        return jdbc.update("UPDATE users SET failed_login_attempts = 0, last_login_at = ?, "
+                        + "updated_at = CURRENT_TIMESTAMP WHERE uuid = ? AND account_non_locked = TRUE "
+                        + "AND enabled = TRUE AND is_deleted = FALSE",
+                Timestamp.from(lastLoginAt), userUuid) > 0;
     }
 
     @Override

@@ -44,8 +44,11 @@ public class RecordLoginEventUseCase {
         loginEventRepository.save(event);
 
         // Preserve the event even if updating the legacy aggregate counters fails.
-        if (user.isPresent()) {
-            recordLoginAttemptUseCase.execute(usernameOrEmail, outcome == LoginEventOutcome.SUCCESS);
+        if (user.isPresent() && outcome == LoginEventOutcome.SUCCESS) {
+            recordLoginAttemptUseCase.execute(usernameOrEmail, true);
+        } else if (user.isPresent() && outcome == LoginEventOutcome.FAILURE
+                && "INVALID_CREDENTIALS".equals(failureCategory)) {
+            recordLoginAttemptUseCase.execute(usernameOrEmail, false);
         }
     }
 

@@ -1,6 +1,7 @@
 package kh.edu.istad.platform.iam.domain.usecase.user;
 
 import kh.edu.istad.platform.iam.domain.dto.command.UpdateUserProfileCommand;
+import kh.edu.istad.platform.iam.domain.audit.AuditAction;
 import kh.edu.istad.platform.iam.domain.dto.result.UserResult;
 import kh.edu.istad.platform.iam.domain.entity.User;
 import kh.edu.istad.platform.iam.domain.port.out.CurrentActorProvider;
@@ -34,6 +35,7 @@ public class UpdateUserProfileUseCase {
     }
 
     @Transactional
+    @AuditAction(action = "USER_UPDATED", targetType = "USER", targetArgumentIndex = 0, targetProperty = "userUuid")
     public UserResult execute(UpdateUserProfileCommand command) {
 
         if (command == null) {

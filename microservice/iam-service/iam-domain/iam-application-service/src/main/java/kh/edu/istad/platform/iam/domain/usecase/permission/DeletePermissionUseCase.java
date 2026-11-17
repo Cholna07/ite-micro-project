@@ -1,6 +1,7 @@
 package kh.edu.istad.platform.iam.domain.usecase.permission;
 
 import kh.edu.istad.platform.iam.domain.entity.Permission;
+import kh.edu.istad.platform.iam.domain.audit.AuditAction;
 import kh.edu.istad.platform.iam.domain.port.out.CurrentActorProvider;
 import kh.edu.istad.platform.iam.domain.port.out.PermissionRepository;
 import org.springframework.stereotype.Component;
@@ -21,6 +22,7 @@ public class DeletePermissionUseCase {
         this.currentActorProvider = currentActorProvider;
     }
 
+    @AuditAction(action = "PERMISSION_DELETED", targetType = "PERMISSION", targetArgumentIndex = 0)
     public void execute(UUID permissionUuid) {
 
         if (permissionUuid == null) {

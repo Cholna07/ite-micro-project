@@ -1,6 +1,7 @@
 package kh.edu.istad.platform.iam.domain.usecase.permission;
 
 import kh.edu.istad.platform.iam.domain.dto.command.CreatePermissionCommand;
+import kh.edu.istad.platform.iam.domain.audit.AuditAction;
 import kh.edu.istad.platform.iam.domain.dto.result.PermissionResult;
 import kh.edu.istad.platform.iam.domain.entity.Permission;
 import kh.edu.istad.platform.iam.domain.port.out.PermissionRepository;
@@ -23,6 +24,7 @@ public class CreatePermissionUseCase {
         this.permissionRepository = permissionRepository;
     }
 
+    @AuditAction(action = "PERMISSION_CREATED", targetType = "PERMISSION")
     public PermissionResult execute(CreatePermissionCommand command) {
 
         if (command == null) {

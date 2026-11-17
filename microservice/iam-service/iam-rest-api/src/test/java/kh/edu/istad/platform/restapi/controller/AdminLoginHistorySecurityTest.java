@@ -2,6 +2,12 @@ package kh.edu.istad.platform.restapi.controller;
 
 import kh.edu.istad.platform.iam.domain.dto.result.PageResult;
 import kh.edu.istad.platform.iam.domain.usecase.user.ListLoginHistoryUseCase;
+import kh.edu.istad.platform.iam.domain.usecase.audit.ListAuditLogsUseCase;
+import kh.edu.istad.platform.iam.domain.usecase.config.GetSystemConfigurationUseCase;
+import kh.edu.istad.platform.iam.domain.usecase.config.UpdateSystemConfigurationUseCase;
+import kh.edu.istad.platform.iam.domain.usecase.config.UpdateSystemConfigurationResult;
+import kh.edu.istad.platform.iam.domain.entity.IamSystemConfiguration;
+import kh.edu.istad.platform.restapi.controller.AdminAuditLogController;
 import kh.edu.istad.platform.iam.domain.usecase.user.ListAccountActivityUseCase;
 import kh.edu.istad.platform.iam.domain.entity.AccountActivityEvent;
 import kh.edu.istad.platform.iam.domain.entity.AccountActivityEventType;
@@ -46,12 +52,15 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest({AdminLoginHistoryController.class, AdminAccountActivityController.class, AdminUserSessionController.class, SessionController.class})
-@Import({SecurityConfig.class, AdminLoginHistoryController.class, AdminAccountActivityController.class, AdminUserSessionController.class, SessionController.class, GlobalExceptionHandler.class, AdminLoginHistorySecurityTest.SecurityBeans.class})
+@WebMvcTest({AdminLoginHistoryController.class, AdminAccountActivityController.class, AdminUserSessionController.class, SessionController.class, AdminAuditLogController.class, AdminSystemConfigurationController.class})
+@Import({SecurityConfig.class, AdminLoginHistoryController.class, AdminAccountActivityController.class, AdminUserSessionController.class, SessionController.class, AdminAuditLogController.class, AdminSystemConfigurationController.class, GlobalExceptionHandler.class, AdminLoginHistorySecurityTest.SecurityBeans.class})
 @ContextConfiguration(classes = AdminLoginHistorySecurityTest.TestApplication.class)
 class AdminLoginHistorySecurityTest {
     @Autowired MockMvc mockMvc;
     @MockitoBean ListLoginHistoryUseCase listLoginHistoryUseCase;
+    @MockitoBean ListAuditLogsUseCase listAuditLogsUseCase;
+    @MockitoBean GetSystemConfigurationUseCase getSystemConfigurationUseCase;
+    @MockitoBean UpdateSystemConfigurationUseCase updateSystemConfigurationUseCase;
     @MockitoBean ListAccountActivityUseCase listAccountActivityUseCase;
     @MockitoBean ListUserSessionsUseCase listUserSessionsUseCase;
     @MockitoBean RevokeUserSessionUseCase revokeUserSessionUseCase;
@@ -66,6 +75,60 @@ class AdminLoginHistorySecurityTest {
         mockMvc.perform(get("/api/admin/login-history")).andExpect(status().isUnauthorized());
         mockMvc.perform(get("/api/admin/login-history").with(user("ordinary-user")))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void auditLogsRequireAuditReadAndPassValidatedFilters() throws Exception {
+        mockMvc.perform(get("/api/admin/audit-logs")).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/admin/audit-logs").with(user("ordinary-user")
+                        .authorities(new SimpleGrantedAuthority("user.read"))))
+                .andExpect(status().isForbidden());
+        when(listAuditLogsUseCase.execute(any())).thenReturn(new PageResult<>(List.of(), 0, 25, 0, 0, true, true));
+        mockMvc.perform(get("/api/admin/audit-logs").param("action", "USER_LOCKED")
+                        .param("targetType", "USER").param("outcome", "SUCCESS")
+                        .param("page", "0").param("size", "25")
+                        .with(user("admin").authorities(new SimpleGrantedAuthority("audit.read"))))
+                .andExpect(status().isOk());
+        org.mockito.ArgumentCaptor<kh.edu.istad.platform.iam.domain.dto.query.AuditLogFilter> filter =
+                org.mockito.ArgumentCaptor.forClass(kh.edu.istad.platform.iam.domain.dto.query.AuditLogFilter.class);
+        org.mockito.Mockito.verify(listAuditLogsUseCase).execute(filter.capture());
+        org.junit.jupiter.api.Assertions.assertEquals("USER_LOCKED", filter.getValue().action());
+        org.junit.jupiter.api.Assertions.assertEquals("USER", filter.getValue().targetType());
+    }
+
+    @Test
+    void systemConfigurationReadAndUpdateUseSeparatePermissionsAndValidateBeforeCallingUseCase() throws Exception {
+        mockMvc.perform(get("/api/admin/system-config")).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/admin/system-config").with(user("manager")
+                        .authorities(new SimpleGrantedAuthority("system.config.manage"))))
+                .andExpect(status().isForbidden());
+        when(getSystemConfigurationUseCase.execute()).thenReturn(IamSystemConfiguration.DEFAULTS);
+        mockMvc.perform(get("/api/admin/system-config").with(user("reader")
+                        .authorities(new SimpleGrantedAuthority("system.config.read"))))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.registrationEnabled").value(true))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.minimumPasswordLength").value(8))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.maxFailedLoginAttempts").value(5));
+
+        IamSystemConfiguration updated = new IamSystemConfiguration(false, 12, 7);
+        when(updateSystemConfigurationUseCase.execute(updated))
+                .thenReturn(new UpdateSystemConfigurationResult(updated, "safe"));
+        mockMvc.perform(put("/api/admin/system-config").with(user("manager")
+                        .authorities(new SimpleGrantedAuthority("system.config.manage")))
+                        .with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf())
+                        .contentType("application/json")
+                        .content("{\"registrationEnabled\":false,\"minimumPasswordLength\":12,\"maxFailedLoginAttempts\":7}"))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.minimumPasswordLength").value(12));
+        org.mockito.Mockito.verify(updateSystemConfigurationUseCase).execute(updated);
+
+        mockMvc.perform(put("/api/admin/system-config").with(user("manager")
+                        .authorities(new SimpleGrantedAuthority("system.config.manage")))
+                        .with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf())
+                        .contentType("application/json")
+                        .content("{\"registrationEnabled\":true,\"minimumPasswordLength\":7,\"maxFailedLoginAttempts\":5}"))
+                .andExpect(status().isBadRequest());
+        org.mockito.Mockito.verifyNoMoreInteractions(updateSystemConfigurationUseCase);
     }
 
     @Test
@@ -113,6 +176,16 @@ class AdminLoginHistorySecurityTest {
                         .with(user("manager").authorities(new SimpleGrantedAuthority("user.manage")))
                         .with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf()))
                 .andExpect(status().isNotFound()); // Passed security; no UserController is loaded in this slice.
+
+        var csrf = org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf();
+        for (String operation : List.of("password/reset", "lock", "unlock", "enable", "disable")) {
+            mockMvc.perform(put("/api/users/" + target + "/" + operation)
+                            .with(user("reader").authorities(new SimpleGrantedAuthority("user.read"))).with(csrf))
+                    .andExpect(status().isForbidden());
+            mockMvc.perform(put("/api/users/" + target + "/" + operation)
+                            .with(user("manager").authorities(new SimpleGrantedAuthority("user.manage"))).with(csrf))
+                    .andExpect(status().isNotFound()); // The security filter permits managers; this slice omits UserController.
+        }
     }
 
     @Test

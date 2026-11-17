@@ -2,6 +2,8 @@ package kh.edu.istad.platform.iam.web.controller;
 
 import kh.edu.istad.platform.iam.domain.dto.command.RegisterUserCommand;
 import kh.edu.istad.platform.iam.domain.usecase.user.RegisterUserUseCase;
+import kh.edu.istad.platform.iam.domain.usecase.config.PasswordPolicyViolationException;
+import kh.edu.istad.platform.iam.domain.usecase.config.RegistrationDisabledException;
 import org.springframework.context.MessageSource;
 import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.stereotype.Controller;
@@ -54,6 +56,14 @@ public class RegistrationController {
         try {
             registerUser.execute(new RegisterUserCommand(username.trim(), email.trim(), password, null, null));
             return "redirect:/login?registered";
+        } catch (RegistrationDisabledException exception) {
+            setFormModel(model, csrf, List.of(messages.getMessage("validation.registrationDisabled", null, locale)));
+            return "forward:/frontend/index.html";
+        } catch (PasswordPolicyViolationException exception) {
+            String key = exception.tooLong() ? "validation.passwordMaximumLength" : "validation.passwordMinimumLength";
+            Object[] args = exception.tooLong() ? new Object[]{exception.maximumLength()} : new Object[]{exception.minimumLength()};
+            setFormModel(model, csrf, List.of(messages.getMessage(key, args, locale)));
+            return "forward:/frontend/index.html";
         } catch (IllegalStateException exception) {
             String key = exception.getMessage() != null && exception.getMessage().toLowerCase(Locale.ROOT).contains("email")
                     ? "validation.emailTaken" : "validation.usernameTaken";

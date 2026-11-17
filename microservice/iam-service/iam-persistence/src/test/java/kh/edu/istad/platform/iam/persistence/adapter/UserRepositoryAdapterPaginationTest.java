@@ -12,6 +12,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.jdbc.core.JdbcTemplate;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Root;
@@ -25,7 +26,7 @@ import static org.mockito.Mockito.*;
 class UserRepositoryAdapterPaginationTest {
     @Test
     void databaseSpecificationRetainsKeywordAndStatusFilters() {
-        var adapter = new UserRepositoryAdapter(mock(UserJpaRepository.class), mock(UserPersistenceMapper.class));
+        var adapter = new UserRepositoryAdapter(mock(UserJpaRepository.class), mock(UserPersistenceMapper.class), mock(JdbcTemplate.class));
         UserFilterQuery query = new UserFilterQuery("alice", true, false, false, 0, 10, "username", "ASC");
         Root<UserJpaEntity> root = mock(Root.class);
         CriteriaBuilder builder = mock(CriteriaBuilder.class);
@@ -45,7 +46,7 @@ class UserRepositoryAdapterPaginationTest {
 
     @Test
     void authenticatableUserFilterRequiresEnabledUnlockedAndNotDeleted() {
-        var adapter = new UserRepositoryAdapter(mock(UserJpaRepository.class), mock(UserPersistenceMapper.class));
+        var adapter = new UserRepositoryAdapter(mock(UserJpaRepository.class), mock(UserPersistenceMapper.class), mock(JdbcTemplate.class));
         UserFilterQuery query = new UserFilterQuery(null, true, null, false, false, 0, 1, "username", "ASC");
         Root<UserJpaEntity> root = mock(Root.class);
         CriteriaBuilder builder = mock(CriteriaBuilder.class);
@@ -68,7 +69,7 @@ class UserRepositoryAdapterPaginationTest {
         when(mapper.toDomain(entity)).thenReturn(domain);
         when(jpa.findAll(ArgumentMatchers.<Specification<UserJpaEntity>>any(), any(PageRequest.class)))
                 .thenReturn(new PageImpl<>(List.of(entity), PageRequest.of(1, 2), 5));
-        var adapter = new UserRepositoryAdapter(jpa, mapper);
+        var adapter = new UserRepositoryAdapter(jpa, mapper, mock(JdbcTemplate.class));
         var query = new UserFilterQuery("alice", true, false, false, 1, 2, "createdAt", "DESC");
 
         PageResult<User> result = adapter.findAll(query);

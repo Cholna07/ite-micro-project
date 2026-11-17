@@ -44,7 +44,9 @@ public class GetUserUseCase {
                 !user.isAccountNonLocked(),
                 user.getCreatedAt(),
                 user.getUpdatedAt(),
-                user.getPictureUrl()
+                user.getPictureUrl(),
+                user.getPasswordChangedAt(),
+                user.getFailedLoginAttempts()
         );
     }
 }

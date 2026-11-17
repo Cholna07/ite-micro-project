@@ -7,6 +7,7 @@ import kh.edu.istad.platform.iam.domain.usecase.user.RevokeUserSessionUseCase;
 import kh.edu.istad.platform.iam.domain.usecase.user.GetCurrentUserUseCase;
 import kh.edu.istad.platform.iam.domain.usecase.user.RecordAccountActivityEventUseCase;
 import kh.edu.istad.platform.iam.domain.entity.AccountActivityEventType;
+import kh.edu.istad.platform.iam.domain.audit.AuditAction;
 import kh.edu.istad.platform.restapi.dto.response.PageMetadata;
 import kh.edu.istad.platform.restapi.dto.response.PageResponse;
 import kh.edu.istad.platform.restapi.dto.response.UserSessionResponse;
@@ -45,6 +46,7 @@ public class AdminUserSessionController {
 
     @DeleteMapping("/{sessionId}")
     @Transactional
+    @AuditAction(action = "SESSION_REVOKED", targetType = "SESSION", targetArgumentIndex = 1)
     public ResponseEntity<Void> revokeOne(@PathVariable("userUuid") UUID userUuid, @PathVariable("sessionId") UUID sessionId) {
         UUID actor = currentUser.execute().uuid();
         if (!revokeSession.execute(userUuid, sessionId, actor, "REVOKED_BY_ADMIN"))
@@ -56,6 +58,7 @@ public class AdminUserSessionController {
 
     @DeleteMapping
     @Transactional
+    @AuditAction(action = "SESSIONS_REVOKED", targetType = "USER", targetArgumentIndex = 0)
     public ResponseEntity<Void> revokeAll(@PathVariable("userUuid") UUID userUuid) {
         int revoked = revokeSession.revokeAll(userUuid, currentUser.execute().uuid());
         if (revoked > 0) recordActivity.execute(userUuid, AccountActivityEventType.OTHER_SESSIONS_REVOKED,

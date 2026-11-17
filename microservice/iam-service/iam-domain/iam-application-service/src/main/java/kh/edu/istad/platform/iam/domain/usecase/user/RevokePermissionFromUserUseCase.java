@@ -3,6 +3,7 @@ package kh.edu.istad.platform.iam.domain.usecase.user;
 import kh.edu.istad.platform.iam.domain.entity.Permission;
 import kh.edu.istad.platform.iam.domain.entity.User;
 import kh.edu.istad.platform.iam.domain.entity.UserPermission;
+import kh.edu.istad.platform.iam.domain.audit.AuditAction;
 import kh.edu.istad.platform.iam.domain.port.out.CurrentActorProvider;
 import kh.edu.istad.platform.iam.domain.port.out.PermissionRepository;
 import kh.edu.istad.platform.iam.domain.port.out.UserPermissionRepository;
@@ -31,6 +32,7 @@ public class RevokePermissionFromUserUseCase {
         this.currentActorProvider = currentActorProvider;
     }
 
+    @AuditAction(action = "USER_PERMISSION_REVOKED", targetType = "USER", targetArgumentIndex = 0)
     public void execute(UUID userUuid, UUID permissionUuid, String reason) {
 
         if (userUuid == null || permissionUuid == null) {

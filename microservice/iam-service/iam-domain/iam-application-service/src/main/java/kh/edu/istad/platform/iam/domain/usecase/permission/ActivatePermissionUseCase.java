@@ -1,6 +1,7 @@
 package kh.edu.istad.platform.iam.domain.usecase.permission;
 
 import kh.edu.istad.platform.iam.domain.entity.Permission;
+import kh.edu.istad.platform.iam.domain.audit.AuditAction;
 import kh.edu.istad.platform.iam.domain.port.out.PermissionRepository;
 import org.springframework.stereotype.Component;
 
@@ -17,6 +18,7 @@ public class ActivatePermissionUseCase {
         this.permissionRepository = permissionRepository;
     }
 
+    @AuditAction(action = "PERMISSION_ACTIVATED", targetType = "PERMISSION", targetArgumentIndex = 0)
     public void execute(UUID permissionUuid) {
 
         if (permissionUuid == null) {

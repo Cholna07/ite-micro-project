@@ -1,6 +1,7 @@
 package kh.edu.istad.platform.iam.domain.usecase.user;
 
 import kh.edu.istad.platform.iam.domain.dto.command.GrantPermissionsToUserCommand;
+import kh.edu.istad.platform.iam.domain.audit.AuditAction;
 import kh.edu.istad.platform.iam.domain.dto.result.PermissionGrantResult;
 import kh.edu.istad.platform.iam.domain.exception.PermissionAlreadyAssignedException;
 import kh.edu.istad.platform.iam.domain.entity.Permission;
@@ -42,6 +43,7 @@ public class GrantPermissionsToUserUseCase {
     }
 
     @Transactional
+    @AuditAction(action = "USER_PERMISSION_GRANTED", targetType = "USER", targetArgumentIndex = 0, targetProperty = "userUuid")
     public List<PermissionGrantResult> execute(
             GrantPermissionsToUserCommand command
     ) {

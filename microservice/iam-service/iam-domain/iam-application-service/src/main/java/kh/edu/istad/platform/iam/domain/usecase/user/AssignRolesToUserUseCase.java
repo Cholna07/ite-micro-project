@@ -1,6 +1,7 @@
 package kh.edu.istad.platform.iam.domain.usecase.user;
 
 import kh.edu.istad.platform.iam.domain.dto.command.AssignRolesToUserCommand;
+import kh.edu.istad.platform.iam.domain.audit.AuditAction;
 import kh.edu.istad.platform.iam.domain.dto.result.RoleAssignmentResult;
 import kh.edu.istad.platform.iam.domain.entity.Role;
 import kh.edu.istad.platform.iam.domain.entity.User;
@@ -40,6 +41,7 @@ public class AssignRolesToUserUseCase {
     }
 
     @Transactional
+    @AuditAction(action = "USER_ROLE_ASSIGNED", targetType = "USER", targetArgumentIndex = 0, targetProperty = "userUuid")
     public List<RoleAssignmentResult> execute(
             AssignRolesToUserCommand command
     ) {

@@ -2,6 +2,7 @@ package kh.edu.istad.platform.iam.domain.usecase.user;
 
 import kh.edu.istad.platform.iam.domain.dto.command.CreateUserCommand;
 import kh.edu.istad.platform.iam.domain.dto.result.UserResult;
+import kh.edu.istad.platform.iam.domain.audit.AuditAction;
 import kh.edu.istad.platform.iam.domain.entity.User;
 import kh.edu.istad.platform.iam.domain.port.out.CurrentActorProvider;
 import kh.edu.istad.platform.iam.domain.port.out.PasswordHasher;
@@ -30,6 +31,7 @@ public class CreateUserUseCase {
         this.currentActorProvider = currentActorProvider;
     }
 
+    @AuditAction(action = "USER_CREATED", targetType = "USER")
     public UserResult execute(CreateUserCommand command) {
 
         if (command == null) {

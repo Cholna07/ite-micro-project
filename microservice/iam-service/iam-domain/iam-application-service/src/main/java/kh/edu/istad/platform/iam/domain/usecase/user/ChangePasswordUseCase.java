@@ -1,10 +1,12 @@
 package kh.edu.istad.platform.iam.domain.usecase.user;
 
 import kh.edu.istad.platform.iam.domain.dto.command.ChangePasswordCommand;
+import kh.edu.istad.platform.iam.domain.audit.AuditAction;
 import kh.edu.istad.platform.iam.domain.entity.User;
 import kh.edu.istad.platform.iam.domain.port.out.CurrentActorProvider;
 import kh.edu.istad.platform.iam.domain.port.out.PasswordHasher;
 import kh.edu.istad.platform.iam.domain.port.out.UserRepository;
+import kh.edu.istad.platform.iam.domain.usecase.config.PasswordPolicy;
 import kh.edu.istad.platform.iam.domain.entity.AccountActivityEventType;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,20 +19,24 @@ public class ChangePasswordUseCase {
     private final PasswordHasher passwordHasher;
     private final CurrentActorProvider currentActorProvider;
     private final RecordAccountActivityEventUseCase recordActivity;
+    private final PasswordPolicy passwordPolicy;
 
     public ChangePasswordUseCase(
             UserRepository userRepository,
             PasswordHasher passwordHasher,
             CurrentActorProvider currentActorProvider,
-            RecordAccountActivityEventUseCase recordActivity
+            RecordAccountActivityEventUseCase recordActivity,
+            PasswordPolicy passwordPolicy
     ) {
         this.userRepository = userRepository;
         this.passwordHasher = passwordHasher;
         this.currentActorProvider = currentActorProvider;
         this.recordActivity = recordActivity;
+        this.passwordPolicy = passwordPolicy;
     }
 
     @Transactional
+    @AuditAction(action = "USER_PASSWORD_CHANGED", targetType = "USER", targetArgumentIndex = 0, targetProperty = "userUuid")
     public void execute(ChangePasswordCommand command) {
 
         if (command == null) {
@@ -40,6 +46,7 @@ public class ChangePasswordUseCase {
         if (command.newPassword() == null || command.newPassword().isBlank()) {
             throw new IllegalArgumentException("New password cannot be empty");
         }
+        passwordPolicy.validate(command.newPassword());
 
         User user = userRepository.findByUuid(command.userUuid())
                 .orElseThrow(() ->

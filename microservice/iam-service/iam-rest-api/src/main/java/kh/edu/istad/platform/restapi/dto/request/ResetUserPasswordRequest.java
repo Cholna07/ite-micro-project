@@ -6,7 +6,7 @@ import jakarta.validation.constraints.Size;
 public record ResetUserPasswordRequest(
 
         @NotBlank
-        @Size(min = 8, max = 100)
+        @Size(max = 100)
         String newPassword,
 
         @NotBlank

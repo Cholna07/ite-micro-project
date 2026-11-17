@@ -1,6 +1,7 @@
 package kh.edu.istad.platform.iam.domain.usecase.role;
 
 import kh.edu.istad.platform.iam.domain.dto.command.UpdateRoleCommand;
+import kh.edu.istad.platform.iam.domain.audit.AuditAction;
 import kh.edu.istad.platform.iam.domain.dto.result.RoleResult;
 import kh.edu.istad.platform.iam.domain.entity.Role;
 import kh.edu.istad.platform.iam.domain.exception.RoleNameConflictException;
@@ -18,6 +19,7 @@ public class UpdateRoleUseCase {
         this.roleRepository = roleRepository;
     }
 
+    @AuditAction(action = "ROLE_UPDATED", targetType = "ROLE", targetArgumentIndex = 0, targetProperty = "roleUuid")
     public RoleResult execute(UpdateRoleCommand command) {
 
         if (command == null || command.roleUuid() == null) {

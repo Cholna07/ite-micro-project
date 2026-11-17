@@ -1,6 +1,7 @@
 package kh.edu.istad.platform.iam.domain.usecase.permission;
 
 import kh.edu.istad.platform.iam.domain.dto.command.UpdatePermissionCommand;
+import kh.edu.istad.platform.iam.domain.audit.AuditAction;
 import kh.edu.istad.platform.iam.domain.dto.result.PermissionResult;
 import kh.edu.istad.platform.iam.domain.entity.Permission;
 import kh.edu.istad.platform.iam.domain.port.out.PermissionRepository;
@@ -22,6 +23,7 @@ public class UpdatePermissionUseCase {
         this.permissionRepository = permissionRepository;
     }
 
+    @AuditAction(action = "PERMISSION_UPDATED", targetType = "PERMISSION", targetArgumentIndex = 0, targetProperty = "permissionUuid")
     public PermissionResult execute(UpdatePermissionCommand command) {
 
         if (command == null) {

@@ -6,6 +6,8 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import kh.edu.istad.platform.iam.domain.usecase.config.PasswordPolicyViolationException;
+import kh.edu.istad.platform.iam.domain.usecase.config.RegistrationDisabledException;
 
 import java.net.URI;
 import java.util.Map;
@@ -13,6 +15,16 @@ import java.util.stream.Collectors;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(PasswordPolicyViolationException.class)
+    public ProblemDetail handlePasswordPolicy(PasswordPolicyViolationException exception) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
+    }
+
+    @ExceptionHandler(RegistrationDisabledException.class)
+    public ProblemDetail handleRegistrationDisabled(RegistrationDisabledException exception) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, exception.getMessage());
+    }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ProblemDetail handleValidation(

@@ -16,6 +16,20 @@ import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class RecordAccountActivityEventUseCaseTest {
+    @Test
+    void recordsEveryCurrentlyDefinedActivityType() {
+        AccountActivityRepository repository = mock(AccountActivityRepository.class);
+        RequestMetadataProvider metadata = mock(RequestMetadataProvider.class);
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        var useCase = new RecordAccountActivityEventUseCase(repository, metadata);
+        UUID userUuid = UUID.randomUUID();
+
+        for (AccountActivityEventType type : AccountActivityEventType.values()) {
+            useCase.execute(userUuid, type, "Security event");
+        }
+
+        verify(repository, times(AccountActivityEventType.values().length)).save(any());
+    }
     @Mock AccountActivityRepository repository;
     @Mock RequestMetadataProvider metadata;
 

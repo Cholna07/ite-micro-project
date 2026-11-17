@@ -11,6 +11,8 @@ import kh.edu.istad.platform.iam.domain.port.out.IdentityRepository;
 import kh.edu.istad.platform.iam.domain.port.out.RoleRepository;
 import kh.edu.istad.platform.iam.domain.port.out.UserRepository;
 import kh.edu.istad.platform.iam.domain.port.out.UserRoleRepository;
+import kh.edu.istad.platform.iam.domain.port.out.SystemConfigurationRepository;
+import kh.edu.istad.platform.iam.domain.usecase.config.RegistrationDisabledException;
 import kh.edu.istad.platform.iam.domain.usecase.user.GetUserAuthoritiesUseCase;
 import kh.edu.istad.platform.iam.domain.usecase.user.RecordAccountActivityEventUseCase;
 import kh.edu.istad.platform.iam.domain.entity.AccountActivityEventType;
@@ -34,6 +36,7 @@ public class FindOrProvisionFederatedUserUseCase {
     private final RoleRepository roleRepository;
     private final GetUserAuthoritiesUseCase getUserAuthoritiesUseCase;
     private final RecordAccountActivityEventUseCase recordActivity;
+    private final SystemConfigurationRepository configurationRepository;
 
     public FindOrProvisionFederatedUserUseCase(
             IdentityRepository identityRepository,
@@ -41,7 +44,8 @@ public class FindOrProvisionFederatedUserUseCase {
             UserRoleRepository userRoleRepository,
             RoleRepository roleRepository,
             GetUserAuthoritiesUseCase getUserAuthoritiesUseCase,
-            RecordAccountActivityEventUseCase recordActivity
+            RecordAccountActivityEventUseCase recordActivity,
+            SystemConfigurationRepository configurationRepository
     ) {
         this.identityRepository = identityRepository;
         this.userRepository = userRepository;
@@ -49,6 +53,7 @@ public class FindOrProvisionFederatedUserUseCase {
         this.roleRepository = roleRepository;
         this.getUserAuthoritiesUseCase = getUserAuthoritiesUseCase;
         this.recordActivity = recordActivity;
+        this.configurationRepository = configurationRepository;
     }
 
     @Transactional
@@ -135,6 +140,9 @@ public class FindOrProvisionFederatedUserUseCase {
             user = email == null ? null : userRepository.findByEmail(email).orElse(null);
 
             if (user == null) {
+
+                if (!configurationRepository.findCurrent().registrationEnabled())
+                    throw new RegistrationDisabledException();
 
                 // 3. Create a new local user.
                 String username = command.username();

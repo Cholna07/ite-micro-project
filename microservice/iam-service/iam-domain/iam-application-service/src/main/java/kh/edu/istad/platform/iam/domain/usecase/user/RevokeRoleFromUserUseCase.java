@@ -2,6 +2,7 @@ package kh.edu.istad.platform.iam.domain.usecase.user;
 
 import kh.edu.istad.platform.iam.domain.entity.User;
 import kh.edu.istad.platform.iam.domain.entity.UserRole;
+import kh.edu.istad.platform.iam.domain.audit.AuditAction;
 import kh.edu.istad.platform.iam.domain.port.out.CurrentActorProvider;
 import kh.edu.istad.platform.iam.domain.port.out.RoleRepository;
 import kh.edu.istad.platform.iam.domain.port.out.UserRepository;
@@ -30,6 +31,7 @@ public class RevokeRoleFromUserUseCase {
         this.currentActorProvider = currentActorProvider;
     }
 
+    @AuditAction(action = "USER_ROLE_REVOKED", targetType = "USER", targetArgumentIndex = 0)
     public void execute(UUID userUuid, UUID roleUuid, String reason) {
 
         if (userUuid == null || roleUuid == null) {

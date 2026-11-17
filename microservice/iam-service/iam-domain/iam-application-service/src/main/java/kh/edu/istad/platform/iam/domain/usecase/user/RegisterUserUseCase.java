@@ -6,6 +6,9 @@ import kh.edu.istad.platform.iam.domain.entity.User;
 import kh.edu.istad.platform.iam.domain.port.out.CurrentActorProvider;
 import kh.edu.istad.platform.iam.domain.port.out.PasswordHasher;
 import kh.edu.istad.platform.iam.domain.port.out.UserRepository;
+import kh.edu.istad.platform.iam.domain.port.out.SystemConfigurationRepository;
+import kh.edu.istad.platform.iam.domain.usecase.config.PasswordPolicy;
+import kh.edu.istad.platform.iam.domain.usecase.config.RegistrationDisabledException;
 import kh.edu.istad.platform.iam.domain.valueobject.Email;
 import kh.edu.istad.platform.iam.domain.valueobject.Username;
 import org.springframework.stereotype.Component;
@@ -19,15 +22,21 @@ public class RegisterUserUseCase {
     private final UserRepository userRepository;
     private final PasswordHasher passwordHasher;
     private final CurrentActorProvider currentActorProvider;
+    private final PasswordPolicy passwordPolicy;
+    private final SystemConfigurationRepository configurationRepository;
 
     public RegisterUserUseCase(
             UserRepository userRepository,
             PasswordHasher passwordHasher,
-            CurrentActorProvider currentActorProvider
+            CurrentActorProvider currentActorProvider,
+            PasswordPolicy passwordPolicy,
+            SystemConfigurationRepository configurationRepository
     ) {
         this.userRepository = userRepository;
         this.passwordHasher = passwordHasher;
         this.currentActorProvider = currentActorProvider;
+        this.passwordPolicy = passwordPolicy;
+        this.configurationRepository = configurationRepository;
     }
 
     public UserResult execute(RegisterUserCommand command) {
@@ -35,6 +44,10 @@ public class RegisterUserUseCase {
         if (command == null) {
             throw new IllegalArgumentException("Registration command cannot be null");
         }
+
+        if (!configurationRepository.findCurrent().registrationEnabled())
+            throw new RegistrationDisabledException();
+        passwordPolicy.validate(command.password());
 
         // Check duplicate username
         if (userRepository.existsByUsername(command.username())) {

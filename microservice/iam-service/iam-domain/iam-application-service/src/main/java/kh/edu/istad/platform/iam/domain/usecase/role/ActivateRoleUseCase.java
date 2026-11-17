@@ -1,6 +1,7 @@
 package kh.edu.istad.platform.iam.domain.usecase.role;
 
 import kh.edu.istad.platform.iam.domain.entity.Role;
+import kh.edu.istad.platform.iam.domain.audit.AuditAction;
 import kh.edu.istad.platform.iam.domain.port.out.RoleRepository;
 import org.springframework.stereotype.Component;
 
@@ -15,6 +16,7 @@ public class ActivateRoleUseCase {
         this.roleRepository = roleRepository;
     }
 
+    @AuditAction(action = "ROLE_ACTIVATED", targetType = "ROLE", targetArgumentIndex = 0)
     public void execute(UUID roleUuid) {
 
         if (roleUuid == null) {

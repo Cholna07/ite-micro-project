@@ -48,8 +48,8 @@ export function AppLayout({ config, title, children, onLogout }: AppLayoutProps)
     ...(config.permissions?.some(permission => ["client.create", "client.read", "client.manage"].includes(permission)) ? [{ hash: "#/clients", label: config.locale === "km" ? "កម្មវិធី OAuth" : "OAuth clients", icon: FiLayers }] : []),
     ...(config.permissions?.includes("session.read") ? [{ hash: "#/admin/sessions", label: config.locale === "km" ? "សម័យអ្នកប្រើ" : "User sessions", icon: FiClock }] : []),
     { hash: "#/admin/history", label: config.locale === "km" ? "ប្រវត្តិចូល" : "Login history", icon: FiActivity },
-    { hash: "#/audit-logs", label: config.locale === "km" ? "កំណត់ហេតុសវនកម្ម" : "Audit logs", icon: FiServer },
-    { hash: "#/system-config", label: config.locale === "km" ? "ការកំណត់ប្រព័ន្ធ" : "System configuration", icon: FiSettings },
+    ...(config.permissions?.includes("audit.read") ? [{ hash: "#/audit-logs", label: config.locale === "km" ? "កំណត់ហេតុសវនកម្ម" : "Audit logs", icon: FiServer }] : []),
+    ...(config.permissions?.includes("system.config.read") ? [{ hash: "#/system-config", label: config.locale === "km" ? "ការកំណត់ប្រព័ន្ធ" : "System configuration", icon: FiSettings }] : []),
   ];
 
   const switchLanguage = (locale: "en" | "km") => {

@@ -96,6 +96,12 @@ public class SecurityConfig {
                         .hasAuthority("user.read")
                         .requestMatchers(HttpMethod.GET, "/api/admin/account-activities")
                         .hasAuthority("activity.read")
+                        .requestMatchers(HttpMethod.GET, "/api/admin/audit-logs")
+                        .hasAuthority("audit.read")
+                        .requestMatchers(HttpMethod.GET, "/api/admin/system-config")
+                        .hasAuthority("system.config.read")
+                        .requestMatchers(HttpMethod.PUT, "/api/admin/system-config")
+                        .hasAuthority("system.config.manage")
 
                         .requestMatchers(HttpMethod.GET, "/api/admin/users/*/sessions")
                         .hasAuthority("session.read")

@@ -1,6 +1,7 @@
 package kh.edu.istad.platform.iam.domain.usecase.role;
 
 import kh.edu.istad.platform.iam.domain.dto.command.AssignPermissionsToRoleCommand;
+import kh.edu.istad.platform.iam.domain.audit.AuditAction;
 import kh.edu.istad.platform.iam.domain.dto.result.PermissionAssignmentResult;
 import kh.edu.istad.platform.iam.domain.exception.RolePermissionAlreadyAssignedException;
 import kh.edu.istad.platform.iam.domain.entity.Permission;
@@ -40,6 +41,7 @@ public class AssignPermissionsToRoleUseCase {
     }
 
     @Transactional
+    @AuditAction(action = "ROLE_PERMISSIONS_ASSIGNED", targetType = "ROLE", targetArgumentIndex = 0, targetProperty = "roleUuid")
     public List<PermissionAssignmentResult> execute(
             AssignPermissionsToRoleCommand command
     ) {

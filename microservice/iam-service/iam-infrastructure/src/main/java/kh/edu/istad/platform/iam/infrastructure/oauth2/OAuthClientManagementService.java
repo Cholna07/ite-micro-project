@@ -1,6 +1,7 @@
 package kh.edu.istad.platform.iam.infrastructure.oauth2;
 
 import kh.edu.istad.platform.iam.domain.entity.Permission;
+import kh.edu.istad.platform.iam.domain.audit.AuditAction;
 import kh.edu.istad.platform.iam.domain.port.out.PermissionRepository;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -89,6 +90,7 @@ public class OAuthClientManagementService {
     }
 
     @Transactional
+    @AuditAction(action = "CLIENT_CREATED", targetType = "OAUTH_CLIENT", targetProperty = "client.clientId")
     public CreatedClient create(ClientConfiguration request) {
         validate(request, null);
         String clientId = UUID.randomUUID().toString();
@@ -101,6 +103,7 @@ public class OAuthClientManagementService {
     }
 
     @Transactional
+    @AuditAction(action = "CLIENT_UPDATED", targetType = "OAUTH_CLIENT", targetArgumentIndex = 0)
     public ClientDetails update(String clientId, ClientConfiguration request) {
         RegisteredClient existing = requireClient(clientId);
         validate(request, existing);
@@ -110,12 +113,14 @@ public class OAuthClientManagementService {
     }
 
     @Transactional
+    @AuditAction(action = "CLIENT_DEACTIVATED", targetType = "OAUTH_CLIENT", targetArgumentIndex = 0)
     public void deactivate(String clientId) {
         RegisteredClient existing = requireClient(clientId);
         setDisabled(existing, true);
     }
 
     @Transactional
+    @AuditAction(action = "CLIENT_ACTIVATED", targetType = "OAUTH_CLIENT", targetArgumentIndex = 0)
     public ClientDetails activate(String clientId) {
         RegisteredClient existing = requireClient(clientId);
         RegisteredClient updated = withDisabled(existing, false);
@@ -124,6 +129,7 @@ public class OAuthClientManagementService {
     }
 
     @Transactional
+    @AuditAction(action = "CLIENT_SECRET_ROTATED", targetType = "OAUTH_CLIENT", targetArgumentIndex = 0)
     public CreatedClient rotateSecret(String clientId) {
         RegisteredClient existing = requireClient(clientId);
         if (isDisabled(existing)) throw new IllegalStateException("A disabled client cannot rotate its secret");

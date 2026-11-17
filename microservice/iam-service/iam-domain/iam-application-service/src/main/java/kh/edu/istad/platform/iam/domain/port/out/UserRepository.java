@@ -2,6 +2,7 @@ package kh.edu.istad.platform.iam.domain.port.out;
 
 import kh.edu.istad.platform.iam.domain.dto.query.UserFilterQuery;
 import kh.edu.istad.platform.iam.domain.dto.result.PageResult;
+import kh.edu.istad.platform.iam.domain.dto.result.LoginAttemptUpdate;
 import kh.edu.istad.platform.iam.domain.entity.User;
 
 import java.util.Optional;
@@ -20,6 +21,10 @@ public interface UserRepository {
 
     // User creation and update
     User save(User user);
+
+    LoginAttemptUpdate recordFailedLoginAttempt(UUID userUuid, int lockoutThreshold);
+
+    boolean recordSuccessfulLogin(UUID userUuid, java.time.Instant lastLoginAt);
 
     // User deletion
     void delete(User user);
