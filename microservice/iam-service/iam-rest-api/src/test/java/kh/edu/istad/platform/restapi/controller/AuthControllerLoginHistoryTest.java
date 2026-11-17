@@ -7,6 +7,9 @@ import kh.edu.istad.platform.iam.domain.usecase.user.RecordLoginEventUseCase;
 import kh.edu.istad.platform.iam.domain.usecase.user.RegisterUserUseCase;
 import kh.edu.istad.platform.iam.domain.dto.command.LoginSessionContext;
 import kh.edu.istad.platform.restapi.dto.request.LoginRequest;
+import kh.edu.istad.platform.restapi.exception.RestApiException;
+import kh.edu.istad.platform.iam.domain.usecase.user.AccountUnavailableException;
+import org.springframework.http.HttpStatus;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -43,11 +46,25 @@ class AuthControllerLoginHistoryTest {
     void recordsFailureWithoutChangingTheAuthenticationFailure() {
         when(loginUserUseCase.execute(any(), any(LoginSessionContext.class))).thenThrow(new IllegalArgumentException("Invalid username/email or password"));
 
-        assertThrows(IllegalArgumentException.class,
+        RestApiException error = assertThrows(RestApiException.class,
                 () -> controller.login(new LoginRequest("user", "wrong-secret"), request()));
+        org.junit.jupiter.api.Assertions.assertEquals(HttpStatus.UNAUTHORIZED, error.getStatus());
 
         verify(recordLoginEventUseCase, times(1)).execute(eq("user"), eq(LoginEventOutcome.FAILURE),
                 eq("192.0.2.5"), eq("test-agent"), eq("INVALID_CREDENTIALS"));
+    }
+
+    @Test
+    void disabledAccountReturnsUnauthorizedInsteadOfServerErrorAndRecordsFailure() {
+        when(loginUserUseCase.execute(any(), any(LoginSessionContext.class)))
+                .thenThrow(new AccountUnavailableException("User account is disabled"));
+
+        RestApiException error = assertThrows(RestApiException.class,
+                () -> controller.login(new LoginRequest("user", "secret"), request()));
+
+        org.junit.jupiter.api.Assertions.assertEquals(HttpStatus.UNAUTHORIZED, error.getStatus());
+        verify(recordLoginEventUseCase).execute(eq("user"), eq(LoginEventOutcome.FAILURE),
+                eq("192.0.2.5"), eq("test-agent"), eq("ACCOUNT_UNAVAILABLE"));
     }
 
     private MockHttpServletRequest request() {

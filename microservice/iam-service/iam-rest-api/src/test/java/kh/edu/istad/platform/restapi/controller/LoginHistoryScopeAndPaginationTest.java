@@ -38,7 +38,9 @@ class LoginHistoryScopeAndPaginationTest {
                 .thenReturn(new PageResult<>(List.of(), 2, 10, 0, 0, false, true));
         MeController controller = new MeController(getCurrentUserUseCase, mock(ListUserIdentitiesUseCase.class),
                 mock(UnlinkIdentityUseCase.class), mock(DisableUserUseCase.class), mock(UpdateUserProfileUseCase.class),
-                mock(ChangePasswordUseCase.class), listLoginHistoryUseCase, mock(kh.edu.istad.platform.iam.domain.usecase.user.ListAccountActivityUseCase.class));
+                mock(ChangePasswordUseCase.class), listLoginHistoryUseCase,
+                mock(kh.edu.istad.platform.iam.domain.usecase.user.ListAccountActivityUseCase.class),
+                mock(kh.edu.istad.platform.restapi.service.ManageCurrentProfilePictureUseCase.class));
 
         controller.getCurrentUserLoginHistory(LoginEventOutcome.FAILURE, 2, 10);
 

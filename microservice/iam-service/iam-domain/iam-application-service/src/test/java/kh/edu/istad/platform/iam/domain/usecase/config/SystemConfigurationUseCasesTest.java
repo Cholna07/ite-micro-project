@@ -36,7 +36,25 @@ class SystemConfigurationUseCasesTest {
         assertThrows(IllegalArgumentException.class, () -> useCase.execute(new IamSystemConfiguration(true, 33, 5)));
         assertThrows(IllegalArgumentException.class, () -> useCase.execute(new IamSystemConfiguration(true, 8, 2)));
         assertThrows(IllegalArgumentException.class, () -> useCase.execute(new IamSystemConfiguration(true, 8, 11)));
+        assertThrows(IllegalArgumentException.class, () -> useCase.execute(
+                new IamSystemConfiguration(true, 8, 5, "javascript:alert(1)")));
         verifyNoInteractions(repository, actor);
+    }
+
+    @Test
+    void acceptsSecureLogoUrlAndDoesNotWriteItIntoAuditDetails() {
+        SystemConfigurationRepository repository = mock(SystemConfigurationRepository.class);
+        CurrentActorProvider actor = mock(CurrentActorProvider.class);
+        when(repository.findCurrent()).thenReturn(IamSystemConfiguration.DEFAULTS);
+        when(actor.getCurrentActor()).thenReturn("admin-uuid");
+        String logo = "https://assets.example.edu/logo.png";
+
+        var result = new UpdateSystemConfigurationUseCase(repository, actor)
+                .execute(new IamSystemConfiguration(true, 8, 5, "  " + logo + "  "));
+
+        assertEquals(logo, result.configuration().logoUrl());
+        assertTrue(result.auditDetails().contains("\"branding.logo-configured\":true"));
+        assertFalse(result.auditDetails().contains(logo));
     }
 
     @Test

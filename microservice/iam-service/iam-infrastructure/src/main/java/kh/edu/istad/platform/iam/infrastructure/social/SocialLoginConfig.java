@@ -17,7 +17,9 @@ import org.springframework.core.annotation.Order;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.oauth2.client.web.AuthorizationRequestRepository;
 import org.springframework.security.oauth2.client.web.HttpSessionOAuth2AuthorizationRequestRepository;
+import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestResolver;
 import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequest;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.context.SecurityContextHolderFilter;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationFailureHandler;
@@ -43,10 +45,18 @@ public class SocialLoginConfig {
     }
 
     @Bean
+    public OAuth2AuthorizationRequestResolver socialAuthorizationRequestResolver(
+            ClientRegistrationRepository registrations
+    ) {
+        return new GitHubPkceAuthorizationRequestResolver(registrations);
+    }
+
+    @Bean
     @Order(2)
     public SecurityFilterChain socialLoginSecurityFilterChain(
             HttpSecurity http,
             AuthorizationRequestRepository<OAuth2AuthorizationRequest> authorizationRequestRepository,
+            OAuth2AuthorizationRequestResolver socialAuthorizationRequestResolver,
             RecordLoginEventUseCase recordLoginEventUseCase,
             RegisterBrowserSessionUseCase registerBrowserSession,
             @Qualifier("sessionRevocationFilter") Filter sessionRevocationFilter
@@ -57,7 +67,9 @@ public class SocialLoginConfig {
                 // repository protect the callback; the provider must be reachable before sign-in.
                 .authorizeHttpRequests(authorize -> authorize.anyRequest().permitAll())
                 .oauth2Login(oauth2 -> oauth2
-                        .authorizationEndpoint(endpoint -> endpoint.authorizationRequestRepository(authorizationRequestRepository))
+                        .authorizationEndpoint(endpoint -> endpoint
+                                .authorizationRequestRepository(authorizationRequestRepository)
+                                .authorizationRequestResolver(socialAuthorizationRequestResolver))
                         .userInfoEndpoint(userInfo -> userInfo
                                 .oidcUserService(federatedOidcUserService)
                                 .userService(federatedOAuth2UserService))
@@ -104,6 +116,7 @@ public class SocialLoginConfig {
                             var session = request.getSession(false);
                             if (session != null && IdentityLinkSession.parseUserUuid(
                                     session.getAttribute(IdentityLinkSession.USER_UUID_ATTRIBUTE)) != null) {
+                                log.warn("Social account linking failed for provider {}", providerFromCallback(request.getRequestURI()), exception);
                                 session.removeAttribute(IdentityLinkSession.USER_UUID_ATTRIBUTE);
                                 response.sendRedirect("/account/linked?link=failed");
                                 return;

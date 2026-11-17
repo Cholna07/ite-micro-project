@@ -13,10 +13,15 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.client.userinfo.DefaultOAuth2UserService;
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest;
+import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
+import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.user.DefaultOAuth2User;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -27,6 +32,7 @@ import java.util.UUID;
 
 @Service
 public class FederatedOAuth2UserService extends DefaultOAuth2UserService {
+    private static final Logger log = LoggerFactory.getLogger(FederatedOAuth2UserService.class);
 
     private final FindOrProvisionFederatedUserUseCase
             findOrProvisionFederatedUserUseCase;
@@ -79,18 +85,7 @@ public class FederatedOAuth2UserService extends DefaultOAuth2UserService {
             pictureUrl = (String) attributes.get("avatar_url");
 
             // Retrieve verified email from GitHub if necessary
-            List<Map<String, Object>> emails =
-                    restClient.get()
-                            .uri("https://api.github.com/user/emails")
-                            .header(
-                                    HttpHeaders.AUTHORIZATION,
-                                    "Bearer " + userRequest.getAccessToken()
-                                            .getTokenValue()
-                            )
-                            .header(HttpHeaders.ACCEPT,
-                                    "application/vnd.github+json")
-                            .retrieve()
-                            .body(new ParameterizedTypeReference<>() {});
+            List<Map<String, Object>> emails = loadGitHubEmails(userRequest);
 
             if (emails != null) {
 
@@ -168,7 +163,13 @@ public class FederatedOAuth2UserService extends DefaultOAuth2UserService {
 
         UUID pendingLinkUserUuid = IdentityLinkRequestContext.pendingUserUuid();
         if (pendingLinkUserUuid != null) {
-            linkIdentityUseCase.execute(pendingLinkUserUuid, command);
+            try {
+                linkIdentityUseCase.execute(pendingLinkUserUuid, command);
+            } catch (RuntimeException exception) {
+                throw new OAuth2AuthenticationException(
+                        new OAuth2Error("identity_link_failed", "Social identity could not be linked", null),
+                        exception);
+            }
             String localUsername = userRepository.findByUuid(pendingLinkUserUuid)
                     .orElseThrow(() -> new IllegalStateException("Linking account is unavailable"))
                     .getUsername().value();
@@ -206,5 +207,23 @@ public class FederatedOAuth2UserService extends DefaultOAuth2UserService {
                 "id"
         );
         return new IamOAuth2User(authenticatedUser, authUser.username());
+    }
+
+    private List<Map<String, Object>> loadGitHubEmails(OAuth2UserRequest userRequest) {
+        try {
+            return restClient.get()
+                    .uri("https://api.github.com/user/emails")
+                    .header(HttpHeaders.AUTHORIZATION,
+                            "Bearer " + userRequest.getAccessToken().getTokenValue())
+                    .header(HttpHeaders.ACCEPT, "application/vnd.github+json")
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<>() {});
+        } catch (RestClientException exception) {
+            // Email is optional for linking an authenticated GitHub identity. Do not
+            // turn a provider email API outage or scope change into an OAuth callback 500.
+            log.warn("GitHub email lookup failed; continuing with provider identity only: {}",
+                    exception.getClass().getSimpleName());
+            return null;
+        }
     }
 }

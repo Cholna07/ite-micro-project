@@ -81,6 +81,16 @@ public class SessionController {
         return ResponseEntity.noContent().build();
     }
 
+    @DeleteMapping("/api/me/sessions/all")
+    @Transactional
+    public ResponseEntity<Void> revokeAll() {
+        UUID actor = currentUser.execute().uuid();
+        int revoked = revokeSession.revokeAll(actor, actor);
+        if (revoked > 0) recordActivity.execute(actor, AccountActivityEventType.OTHER_SESSIONS_REVOKED,
+                "All active sessions revoked");
+        return ResponseEntity.noContent().build();
+    }
+
     private UUID currentSessionId(HttpServletRequest request) {
         var session = request.getSession(false);
         if (session != null) {

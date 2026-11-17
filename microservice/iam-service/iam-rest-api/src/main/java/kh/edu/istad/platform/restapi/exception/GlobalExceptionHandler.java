@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import kh.edu.istad.platform.iam.domain.usecase.config.PasswordPolicyViolationException;
 import kh.edu.istad.platform.iam.domain.usecase.config.RegistrationDisabledException;
+import kh.edu.istad.platform.iam.domain.usecase.user.CurrentPasswordIncorrectException;
 
 import java.net.URI;
 import java.util.Map;
@@ -19,6 +20,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(PasswordPolicyViolationException.class)
     public ProblemDetail handlePasswordPolicy(PasswordPolicyViolationException exception) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
+    }
+
+    @ExceptionHandler(CurrentPasswordIncorrectException.class)
+    public ProblemDetail handleCurrentPasswordIncorrect() {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Current password is incorrect");
     }
 
     @ExceptionHandler(RegistrationDisabledException.class)

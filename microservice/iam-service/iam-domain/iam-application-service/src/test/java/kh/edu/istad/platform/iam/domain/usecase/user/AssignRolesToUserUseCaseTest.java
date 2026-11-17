@@ -3,6 +3,7 @@ package kh.edu.istad.platform.iam.domain.usecase.user;
 import kh.edu.istad.platform.iam.domain.dto.command.AssignRolesToUserCommand;
 import kh.edu.istad.platform.iam.domain.entity.Role;
 import kh.edu.istad.platform.iam.domain.entity.User;
+import kh.edu.istad.platform.iam.domain.entity.UserRole;
 import kh.edu.istad.platform.iam.domain.exception.RoleAlreadyAssignedException;
 import kh.edu.istad.platform.iam.domain.port.out.CurrentActorProvider;
 import kh.edu.istad.platform.iam.domain.port.out.RoleRepository;
@@ -106,6 +107,44 @@ class AssignRolesToUserUseCaseTest {
     }
 
     @Test
+    void assigningAdminRevokesUserRoleAndKeepsItsAssignmentHistory() {
+        Role userRole = namedRole(20L, "USER");
+        Role adminRole = namedRole(21L, "ADMIN");
+        UserRole userAssignment = new UserRole();
+        userAssignment.setUserId(7L);
+        userAssignment.setRoleId(userRole.getId());
+        when(roles.findByUuid(adminRole.getUuid())).thenReturn(Optional.of(adminRole));
+        when(roles.findByName("USER")).thenReturn(Optional.of(userRole));
+        when(assignments.findActiveAssignment(7L, userRole.getId())).thenReturn(Optional.of(userAssignment));
+
+        useCase.execute(command(List.of(adminRole.getUuid())));
+
+        assertNotNull(userAssignment.getRevokedAt());
+        assertEquals("admin", userAssignment.getRevokedBy());
+        assertEquals("ADMIN role assigned; standard USER role is exclusive", userAssignment.getReason());
+        verify(assignments).save(userAssignment);
+    }
+
+    @Test
+    void doesNotAllowUserAndAdminRolesTogetherOrAddingUserToAdmin() {
+        Role userRole = namedRole(20L, "USER");
+        Role adminRole = namedRole(21L, "ADMIN");
+        when(roles.findByUuid(userRole.getUuid())).thenReturn(Optional.of(userRole));
+        when(roles.findByUuid(adminRole.getUuid())).thenReturn(Optional.of(adminRole));
+        when(roles.findByName("ADMIN")).thenReturn(Optional.of(adminRole));
+        lenient().when(assignments.existsActiveAssignment(7L, userRole.getId())).thenReturn(false);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> useCase.execute(command(List.of(userRole.getUuid(), adminRole.getUuid()))));
+        verifyNoWrites();
+
+        lenient().when(assignments.existsActiveAssignment(7L, adminRole.getId())).thenReturn(true);
+        assertThrows(IllegalArgumentException.class,
+                () -> useCase.execute(command(List.of(userRole.getUuid()))));
+        verifyNoWrites();
+    }
+
+    @Test
     void prevalidatesWholeBatchSoAnInvalidLaterRoleLeavesNoPartialWrites() {
         UUID missingRoleUuid = UUID.randomUUID();
         when(roles.findByUuid(missingRoleUuid)).thenReturn(Optional.empty());
@@ -132,6 +171,12 @@ class AssignRolesToUserUseCaseTest {
         role.setUuid(UUID.randomUUID());
         role.setName(new RoleName("role-" + id));
         role.setActive(true);
+        return role;
+    }
+
+    private Role namedRole(long id, String name) {
+        Role role = role(id);
+        role.setName(new RoleName(name));
         return role;
     }
 

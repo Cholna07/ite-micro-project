@@ -7,6 +7,8 @@ import kh.edu.istad.platform.iam.domain.dto.command.RegisterUserCommand;
 import kh.edu.istad.platform.iam.domain.dto.result.LoginResult;
 import kh.edu.istad.platform.iam.domain.dto.result.UserResult;
 import kh.edu.istad.platform.iam.domain.usecase.user.LoginUserUseCase;
+import kh.edu.istad.platform.iam.domain.usecase.user.AccountUnavailableException;
+import kh.edu.istad.platform.iam.domain.usecase.user.DuplicateAccountException;
 import kh.edu.istad.platform.iam.domain.usecase.user.RecordLoginEventUseCase;
 import kh.edu.istad.platform.iam.domain.entity.LoginEventOutcome;
 import kh.edu.istad.platform.iam.domain.usecase.user.RegisterUserUseCase;
@@ -52,7 +54,12 @@ public class AuthController {
                 request.familyName()
         );
 
-        UserResult result = registerUserUseCase.execute(command);
+        UserResult result;
+        try {
+            result = registerUserUseCase.execute(command);
+        } catch (DuplicateAccountException duplicate) {
+            throw new RestApiException(HttpStatus.CONFLICT, duplicate.getMessage());
+        }
 
         UserResponse response = new UserResponse(
                 result.uuid(),
@@ -92,6 +99,11 @@ public class AuthController {
         } catch (RuntimeException authenticationFailure) {
             recordLoginEventSafely(request.usernameOrEmail(), LoginEventOutcome.FAILURE,
                     httpRequest, failureCategory(authenticationFailure));
+            if (authenticationFailure instanceof IllegalArgumentException
+                    || authenticationFailure instanceof AccountUnavailableException) {
+                throw new RestApiException(HttpStatus.UNAUTHORIZED,
+                        "Invalid credentials or account unavailable");
+            }
             throw authenticationFailure;
         }
 
@@ -123,7 +135,7 @@ public class AuthController {
 
     private String failureCategory(RuntimeException exception) {
         if (exception instanceof IllegalArgumentException) return "INVALID_CREDENTIALS";
-        if (exception instanceof IllegalStateException) return "ACCOUNT_UNAVAILABLE";
+        if (exception instanceof AccountUnavailableException) return "ACCOUNT_UNAVAILABLE";
         return "AUTHENTICATION_FAILED";
     }
 }

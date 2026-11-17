@@ -18,6 +18,7 @@ import kh.edu.istad.platform.iam.domain.usecase.role.ActivateRoleUseCase;
 import kh.edu.istad.platform.iam.domain.usecase.role.AssignPermissionsToRoleUseCase;
 import kh.edu.istad.platform.iam.domain.usecase.role.CreateRoleUseCase;
 import kh.edu.istad.platform.iam.domain.usecase.user.AssignRolesToUserUseCase;
+import kh.edu.istad.platform.iam.domain.usecase.user.RevokeRoleFromUserUseCase;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
@@ -28,7 +29,7 @@ import java.util.List;
 
 /**
  * Optional first-admin bootstrap. Configure IAM_BOOTSTRAP_ADMIN_USERNAME to
- * grant the ADMIN role to an already registered, enabled account.
+ * grant only the ADMIN role to an already registered, enabled account.
  */
 @Component
 public class BootstrapAdminRunner implements ApplicationRunner {
@@ -63,6 +64,7 @@ public class BootstrapAdminRunner implements ApplicationRunner {
     private final CreateRoleUseCase createRole;
     private final CreatePermissionUseCase createPermission;
     private final AssignRolesToUserUseCase assignRoles;
+    private final RevokeRoleFromUserUseCase revokeRole;
     private final AssignPermissionsToRoleUseCase assignPermissions;
     private final ActivateRoleUseCase activateRole;
     private final ActivatePermissionUseCase activatePermission;
@@ -77,6 +79,7 @@ public class BootstrapAdminRunner implements ApplicationRunner {
             CreateRoleUseCase createRole,
             CreatePermissionUseCase createPermission,
             AssignRolesToUserUseCase assignRoles,
+            RevokeRoleFromUserUseCase revokeRole,
             AssignPermissionsToRoleUseCase assignPermissions,
             ActivateRoleUseCase activateRole,
             ActivatePermissionUseCase activatePermission
@@ -90,6 +93,7 @@ public class BootstrapAdminRunner implements ApplicationRunner {
         this.createRole = createRole;
         this.createPermission = createPermission;
         this.assignRoles = assignRoles;
+        this.revokeRole = revokeRole;
         this.assignPermissions = assignPermissions;
         this.activateRole = activateRole;
         this.activatePermission = activatePermission;
@@ -98,11 +102,15 @@ public class BootstrapAdminRunner implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) {
         String username = bootstrapUsername == null ? "" : bootstrapUsername.trim();
-        if (username.isEmpty()) return;
+        if (username.isEmpty()) {
+            LOG.log(System.Logger.Level.WARNING,
+                    "No bootstrap administrator is configured. Set IAM_BOOTSTRAP_ADMIN_USERNAME to an existing account username or email, then restart the service.");
+            return;
+        }
 
-        User user = users.findByUsername(username).orElse(null);
+        User user = users.findByUsernameOrEmail(username).orElse(null);
         if (user == null) {
-            LOG.log(System.Logger.Level.WARNING, "IAM bootstrap admin username was not found; no account was granted ADMIN.");
+            LOG.log(System.Logger.Level.WARNING, "IAM bootstrap admin account was not found; no account was granted ADMIN.");
             return;
         }
         if (!user.isEnabled() || user.isDeleted()) {
@@ -161,7 +169,10 @@ public class BootstrapAdminRunner implements ApplicationRunner {
         if (!userRoles.existsActiveAssignment(user.getId(), adminId)) {
             assignRoles.execute(new AssignRolesToUserCommand(user.getUuid(), List.of(adminUuid), null, "Configured bootstrap administrator"));
         }
-        LOG.log(System.Logger.Level.INFO, "Configured the ADMIN role for the explicitly configured IAM bootstrap username.");
+        roles.findByName("USER").ifPresent(userRole -> userRoles.findActiveAssignment(user.getId(), userRole.getId())
+                .ifPresent(assignment -> revokeRole.execute(user.getUuid(), userRole.getUuid(),
+                        "Configured bootstrap administrator uses the ADMIN role exclusively")));
+        LOG.log(System.Logger.Level.INFO, "Configured the ADMIN role exclusively for the explicitly configured IAM bootstrap username.");
     }
 
     private record AdminPermission(String name, String resource, String action) {}

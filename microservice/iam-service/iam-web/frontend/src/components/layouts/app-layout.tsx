@@ -1,12 +1,12 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
+import { apiClient } from "@/lib/api-client";
 import {
   FiChevronDown,
   FiChevronsLeft,
   FiChevronsRight,
   FiCompass,
   FiGlobe,
-  FiGrid,
   FiActivity,
   FiClock,
   FiHome,
@@ -30,11 +30,12 @@ interface AppLayoutProps {
   title: string;
   children: ReactNode;
   onLogout?: () => void;
+  logoUrl?: string;
 }
 
 type AdminNavItem = { hash: string; label: string; icon: IconType };
 
-export function AppLayout({ config, title, children, onLogout }: AppLayoutProps) {
+export function AppLayout({ config, title, children, onLogout, logoUrl }: AppLayoutProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const t = (key: string) => config.messages[key] ?? key;
@@ -47,7 +48,7 @@ export function AppLayout({ config, title, children, onLogout }: AppLayoutProps)
     ...(config.permissions?.includes("permission.read") ? [{ hash: "#/permissions", label: config.locale === "km" ? "សិទ្ធិ" : "Permissions", icon: FiLock }] : []),
     ...(config.permissions?.some(permission => ["client.create", "client.read", "client.manage"].includes(permission)) ? [{ hash: "#/clients", label: config.locale === "km" ? "កម្មវិធី OAuth" : "OAuth clients", icon: FiLayers }] : []),
     ...(config.permissions?.includes("session.read") ? [{ hash: "#/admin/sessions", label: config.locale === "km" ? "សម័យអ្នកប្រើ" : "User sessions", icon: FiClock }] : []),
-    { hash: "#/admin/history", label: config.locale === "km" ? "ប្រវត្តិចូល" : "Login history", icon: FiActivity },
+    ...(config.permissions?.includes("user.read") ? [{ hash: "#/admin/history", label: config.locale === "km" ? "ប្រវត្តិចូល" : "Login history", icon: FiActivity }] : []),
     ...(config.permissions?.includes("audit.read") ? [{ hash: "#/audit-logs", label: config.locale === "km" ? "កំណត់ហេតុសវនកម្ម" : "Audit logs", icon: FiServer }] : []),
     ...(config.permissions?.includes("system.config.read") ? [{ hash: "#/system-config", label: config.locale === "km" ? "ការកំណត់ប្រព័ន្ធ" : "System configuration", icon: FiSettings }] : []),
   ];
@@ -65,6 +66,7 @@ export function AppLayout({ config, title, children, onLogout }: AppLayoutProps)
         adminLinks={adminLinks}
         collapsed={collapsed}
         config={config}
+        logoUrl={logoUrl}
         mobileOpen={mobileOpen}
         onClose={() => setMobileOpen(false)}
         onToggle={() => setCollapsed((value) => !value)}
@@ -92,6 +94,7 @@ function Sidebar({
   adminLinks,
   collapsed,
   config,
+  logoUrl,
   mobileOpen,
   onClose,
   onToggle,
@@ -100,6 +103,7 @@ function Sidebar({
   adminLinks: AdminNavItem[];
   collapsed: boolean;
   config: DashboardPageConfig;
+  logoUrl?: string;
   mobileOpen: boolean;
   onClose: () => void;
   onToggle: () => void;
@@ -108,14 +112,15 @@ function Sidebar({
   const isConsole = true;
   const sections = isConsole
     ? [
-        { title: config.locale === "km" ? "ទិដ្ឋភាពទូទៅ" : "OVERVIEW", items: [{ href: "/", label: t("dashboard.overview"), icon: FiHome }] },
+        { title: config.locale === "km" ? "ទិដ្ឋភាពទូទៅ" : "OVERVIEW", items: adminLinks.length > 0 ? [{ href: "/", label: t("dashboard.overview"), icon: FiHome }] : [] },
         { title: config.locale === "km" ? "គណនី" : "ACCOUNT", items: [
           { href: "/account/profile", label: config.locale === "km" ? "ប្រវត្តិរូប" : "My profile", icon: FiUser },
-          { href: "/account/password", label: t("profile.changePassword"), icon: FiShield },
+          { href: "/account/password", label: config.locale === "km" ? "សុវត្ថិភាព និងពាក្យសម្ងាត់" : "Security & Password", icon: FiShield },
           { href: "/account/linked", label: t("dashboard.linkedAccounts"), icon: FiLink2 },
-          { href: "/account/apps", label: t("dashboard.connectedApplications"), icon: FiGrid },
-          { href: "/account/sessions", label: config.locale === "km" ? "សម័យសកម្ម" : "Active sessions", icon: FiLock },
+          { href: "/account/sessions", label: config.locale === "km" ? "គ្រប់គ្រងសម័យ" : "Session management", icon: FiLock },
+          { href: "/account/activity", label: config.locale === "km" ? "សកម្មភាពគណនី" : "Account activity", icon: FiActivity },
           { href: "/account/history", label: config.locale === "km" ? "ប្រវត្តិចូល" : "Login history", icon: FiCompass },
+          { href: "/account/deactivate", label: config.locale === "km" ? "បិទគណនី" : "Deactivate account", icon: FiUser },
         ] },
       ]
     : config.locale === "km"
@@ -124,7 +129,6 @@ function Sidebar({
         { title: "គណនី", items: [
           { href: "/profile/edit", label: t("dashboard.myProfile"), icon: FiUser },
           { href: "/profile/accounts", label: t("dashboard.linkedAccounts"), icon: FiLink2 },
-          { href: "/profile/apps", label: t("dashboard.connectedApplications"), icon: FiGrid },
         ] },
         { title: "សុវត្ថិភាព", items: [{ href: "/profile/password", label: t("profile.changePassword"), icon: FiShield }] },
       ]
@@ -133,7 +137,6 @@ function Sidebar({
         { title: "ACCOUNT", items: [
           { href: "/profile/edit", label: t("dashboard.myProfile"), icon: FiUser },
           { href: "/profile/accounts", label: t("dashboard.linkedAccounts"), icon: FiLink2 },
-          { href: "/profile/apps", label: t("dashboard.connectedApplications"), icon: FiGrid },
         ] },
         { title: "SECURITY", items: [{ href: "/profile/password", label: t("profile.changePassword"), icon: FiShield }] },
       ];
@@ -142,19 +145,19 @@ function Sidebar({
     <aside className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r border-[#E5E7EB] bg-white text-[#111827] transition-[width,transform] duration-200 ${collapsed ? "lg:w-[76px]" : "lg:w-[232px]"} ${mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"} w-[270px]`}>
       <div className={`flex h-[68px] shrink-0 items-center border-b border-[#E5E7EB] px-4 ${collapsed ? "lg:justify-center lg:px-0" : "justify-between"}`}>
         {isConsole ? <Link className="flex min-w-0 items-center gap-3" to="/" onClick={onClose}>
-          <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-[#EEECFF] text-[#534AB7]"><FiCompass aria-hidden="true" size={18} /></span>
+          {logoUrl ? <img src={logoUrl} alt="ISTAD IAM" className="size-9 shrink-0 rounded-lg object-contain" referrerPolicy="no-referrer" /> : <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-[#EEECFF] text-[#534AB7]"><FiCompass aria-hidden="true" size={18} /></span>}
           <span className={collapsed ? "lg:hidden" : ""}>
-            <span className="block whitespace-nowrap text-sm font-semibold tracking-tight">Northstar IAM</span>
+            <span className="block whitespace-nowrap text-sm font-semibold tracking-tight">ISTAD IAM</span>
             <span className="mt-0.5 block text-[10px] font-medium uppercase tracking-[0.14em] text-slate-500">{t("dashboard.identityWorkspace")}</span>
           </span>
         </Link> : <a className="flex min-w-0 items-center gap-3" href="/" onClick={onClose}>
-          <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-[#EEECFF] text-[#534AB7]"><FiCompass aria-hidden="true" size={18} /></span>
-          <span className={collapsed ? "lg:hidden" : ""}><span className="block whitespace-nowrap text-sm font-semibold tracking-tight">Northstar IAM</span><span className="mt-0.5 block text-[10px] font-medium uppercase tracking-[0.14em] text-slate-500">{t("dashboard.identityWorkspace")}</span></span>
+          {logoUrl ? <img src={logoUrl} alt="ISTAD IAM" className="size-9 shrink-0 rounded-lg object-contain" referrerPolicy="no-referrer" /> : <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-[#EEECFF] text-[#534AB7]"><FiCompass aria-hidden="true" size={18} /></span>}
+          <span className={collapsed ? "lg:hidden" : ""}><span className="block whitespace-nowrap text-sm font-semibold tracking-tight">ISTAD IAM</span><span className="mt-0.5 block text-[10px] font-medium uppercase tracking-[0.14em] text-slate-500">{t("dashboard.identityWorkspace")}</span></span>
         </a>}
         <button aria-label={t("dashboard.closeMenu")} className="grid size-8 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 lg:hidden" onClick={onClose} type="button"><FiX aria-hidden="true" size={17} /></button>
       </div>
       <nav aria-label={t("dashboard.menu")} className="flex-1 overflow-y-auto px-3 py-5">
-        {sections.map((section, sectionIndex) => (
+        {sections.filter(section => section.items.length > 0).map((section, sectionIndex) => (
           <section className={sectionIndex ? "mt-7" : ""} key={section.title}>
             <p className={`mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400 ${collapsed ? "lg:hidden" : ""}`}>{section.title}</p>
             <div className="space-y-1">
@@ -218,13 +221,30 @@ function Topbar({
   title: string;
   t: (key: string) => string;
 }) {
+  const [managedPictureUrl, setManagedPictureUrl] = useState("");
+  useEffect(() => {
+    if (!config.user.pictureUrl.startsWith("profile-picture:")) {
+      setManagedPictureUrl("");
+      return;
+    }
+    let cancelled = false;
+    let objectUrl = "";
+    setManagedPictureUrl("");
+    apiClient.get<Blob>("/me/profile-picture", { responseType: "blob" }).then(response => {
+      objectUrl = URL.createObjectURL(response.data);
+      if (cancelled) URL.revokeObjectURL(objectUrl);
+      else setManagedPictureUrl(objectUrl);
+    }).catch(() => setManagedPictureUrl(""));
+    return () => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [config.user.pictureUrl]);
+  const avatarUrl = config.user.pictureUrl.startsWith("profile-picture:") ? managedPictureUrl : config.user.pictureUrl;
   return (
     <header className="sticky top-0 z-30 border-b border-[#E5E7EB] bg-white/95 backdrop-blur">
       <div className="flex h-[64px] items-center justify-between gap-3 px-4 sm:px-7 lg:px-9">
         <div className="flex min-w-0 items-center gap-3">
           <button aria-label={t("dashboard.menu")} className="grid size-9 shrink-0 place-items-center rounded-lg border border-[#E5E7EB] bg-white text-slate-600 hover:bg-slate-50 lg:hidden" onClick={onMenu} type="button"><FiMenu aria-hidden="true" size={18} /></button>
           <div className="min-w-0">
-        <div className="hidden items-center gap-2 text-xs text-slate-400 sm:flex"><Link className="hover:text-slate-700" to="/">Northstar IAM</Link><span>/</span><span className="text-slate-500">{title}</span></div>
+        <div className="hidden items-center gap-2 text-xs text-slate-400 sm:flex"><Link className="hover:text-slate-700" to="/">ISTAD IAM</Link><span>/</span><span className="text-slate-500">{title}</span></div>
             <p className="truncate text-sm font-semibold text-slate-900 sm:mt-1">{title}</p>
           </div>
         </div>
@@ -240,7 +260,7 @@ function Topbar({
           </details>
           <details className="group relative">
             <summary className="flex h-9 cursor-pointer list-none items-center gap-2 rounded-lg px-1.5 text-sm hover:bg-slate-50 [&::-webkit-details-marker]:hidden">
-              {config.user.pictureUrl ? <img alt="" className="size-8 rounded-full border border-[#E5E7EB] object-cover" referrerPolicy="no-referrer" src={config.user.pictureUrl} /> : <span className="grid size-8 place-items-center rounded-full bg-[#EEECFF] text-xs font-semibold text-[#534AB7]">{initial}</span>}
+              {avatarUrl ? <img alt="" className="size-8 rounded-full border border-[#E5E7EB] object-cover" referrerPolicy="no-referrer" src={avatarUrl} /> : <span className="grid size-8 place-items-center rounded-full bg-[#EEECFF] text-xs font-semibold text-[#534AB7]">{initial}</span>}
               <span className="hidden max-w-36 truncate font-medium text-slate-700 sm:block">{displayName}</span>
               <FiChevronDown aria-hidden="true" className="hidden text-slate-400 transition-transform group-open:rotate-180 sm:block" size={14} />
             </summary>

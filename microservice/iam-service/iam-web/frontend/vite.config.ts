@@ -9,6 +9,19 @@ const currentDir = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   base: "/frontend/",
   plugins: [react(), tailwindcss()],
+  server: {
+    proxy: {
+      "/api": "http://localhost:9191",
+      "/connect": "http://localhost:9191",
+      "/oauth2": "http://localhost:9191",
+      "/login/oauth2": "http://localhost:9191",
+      "/login": {
+        target: "http://localhost:9191",
+        bypass: request => request.headers["x-requested-with"] === "XMLHttpRequest" ? undefined : "/index.html",
+      },
+      "/logout": "http://localhost:9191",
+    },
+  },
   resolve: {
     alias: {
       "@": path.resolve(currentDir, "src"),

@@ -15,6 +15,14 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
+// Spring MVC resolves implicit @RequestParam/@PathVariable names from Java
+// reflection metadata. Keep that metadata in every module's compiled classes.
+allprojects {
+    tasks.withType(JavaCompile).configureEach {
+        options.compilerArgs.add('-parameters')
+    }
+}
+
 test {
     useJUnitPlatform()
 }

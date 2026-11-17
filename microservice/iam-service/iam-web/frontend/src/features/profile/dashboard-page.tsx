@@ -216,7 +216,7 @@ export function DashboardPage({ config }: { config: DashboardPageConfig }) {
           </div>
 
           <footer className="flex flex-col gap-1 border-t border-slate-200/80 pt-4 text-[11px] text-slate-400 sm:flex-row sm:items-center sm:justify-between">
-            <span>Northstar IAM</span>
+            <span>ISTAD IAM</span>
             <span>{t("dashboard.primaryIdentity")} · {config.user.username}</span>
           </footer>
         </AppLayout>

@@ -19,6 +19,8 @@ import kh.edu.istad.platform.iam.domain.entity.LoginEventOutcome;
 import kh.edu.istad.platform.iam.domain.dto.result.PageResult;
 import kh.edu.istad.platform.iam.domain.usecase.user.ChangePasswordUseCase;
 import kh.edu.istad.platform.iam.domain.usecase.user.UpdateUserProfileUseCase;
+import kh.edu.istad.platform.restapi.service.ManageCurrentProfilePictureUseCase;
+import kh.edu.istad.platform.restapi.service.ProfilePictureAccessException;
 import kh.edu.istad.platform.restapi.dto.request.ChangePasswordRequest;
 import kh.edu.istad.platform.restapi.dto.request.UpdateUserProfileRequest;
 import kh.edu.istad.platform.restapi.exception.RestApiException;
@@ -31,6 +33,8 @@ import kh.edu.istad.platform.restapi.dto.response.PageResponse;
 import kh.edu.istad.platform.restapi.dto.response.AccountActivityEventResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.core.Authentication;
@@ -43,10 +47,15 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.UUID;
+import java.io.IOException;
+import java.util.Optional;
+import kh.edu.istad.platform.iam.domain.port.out.ProfilePictureStorage;
 
 @RestController
 @RequestMapping("/api/me")
@@ -61,6 +70,7 @@ public class MeController {
     private final ChangePasswordUseCase changePasswordUseCase;
     private final ListLoginHistoryUseCase listLoginHistoryUseCase;
     private final ListAccountActivityUseCase listAccountActivityUseCase;
+    private final ManageCurrentProfilePictureUseCase manageProfilePicture;
 
     @GetMapping
     public ResponseEntity<UserResponse> getCurrentUser(Authentication authentication) {
@@ -85,7 +95,7 @@ public class MeController {
             result = updateUserProfileUseCase.execute(new UpdateUserProfileCommand(
                     userUuid, request.username(), request.email(), request.givenName(), request.familyName(),
                     request.middleName(), request.nickname(), request.gender(), request.birthdate(), request.profileUrl(),
-                    request.pictureUrl(), request.websiteUrl(), request.zoneInfo(), request.locale(), request.phoneNumber(),
+                    null, request.websiteUrl(), request.zoneInfo(), request.locale(), request.phoneNumber(),
                     request.streetAddress(), request.locality(), request.region(), request.postalCode(), request.country()
             ));
         } catch (IllegalArgumentException exception) {
@@ -96,6 +106,46 @@ public class MeController {
             throw new RestApiException(HttpStatus.CONFLICT, "Username or email is already in use");
         }
         return ResponseEntity.ok(toResponse(result));
+    }
+
+    @PostMapping(value = "/profile-picture", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<UserResponse> uploadCurrentProfilePicture(@RequestPart("file") MultipartFile file) {
+        UUID userUuid = getCurrentUserUseCase.execute().uuid();
+        try {
+            UserResult result = manageProfilePicture.upload(userUuid, file.getBytes(), file.getContentType());
+            return ResponseEntity.ok(toResponse(result));
+        } catch (IOException exception) {
+            throw new RestApiException(HttpStatus.BAD_REQUEST, "The uploaded image could not be read");
+        } catch (IllegalArgumentException exception) {
+            throw new RestApiException(HttpStatus.BAD_REQUEST, exception.getMessage());
+        } catch (ProfilePictureAccessException exception) {
+            throw new RestApiException(HttpStatus.FORBIDDEN, exception.getMessage());
+        }
+    }
+
+    @GetMapping("/profile-picture")
+    public ResponseEntity<byte[]> getCurrentProfilePicture() {
+        UUID userUuid = getCurrentUserUseCase.execute().uuid();
+        Optional<ProfilePictureStorage.StoredPicture> picture = manageProfilePicture.read(userUuid);
+        if (picture.isEmpty()) throw new RestApiException(HttpStatus.NOT_FOUND, "Profile picture not found");
+        ProfilePictureStorage.StoredPicture image = picture.get();
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(image.mediaType()))
+                .header(HttpHeaders.CACHE_CONTROL, "private, no-store")
+                .header("X-Content-Type-Options", "nosniff")
+                .body(image.content());
+    }
+
+    @DeleteMapping("/profile-picture")
+    public ResponseEntity<UserResponse> removeCurrentProfilePicture() {
+        UUID userUuid = getCurrentUserUseCase.execute().uuid();
+        try {
+            return ResponseEntity.ok(toResponse(manageProfilePicture.remove(userUuid)));
+        } catch (IllegalArgumentException exception) {
+            throw new RestApiException(HttpStatus.NOT_FOUND, exception.getMessage());
+        } catch (ProfilePictureAccessException exception) {
+            throw new RestApiException(HttpStatus.FORBIDDEN, exception.getMessage());
+        }
     }
 
     @PutMapping("/password")
@@ -120,7 +170,7 @@ public class MeController {
 
     @PostMapping("/identities/link/{provider}")
     public ResponseEntity<IdentityLinkInitiationResponse> initiateIdentityLink(
-            @PathVariable String provider,
+            @PathVariable("provider") String provider,
             HttpServletRequest request
     ) {
         String registrationId = provider == null ? "" : provider.trim().toLowerCase(java.util.Locale.ROOT);
@@ -174,7 +224,7 @@ public class MeController {
     }
 
     @DeleteMapping("/identities/{identityUuid}")
-    public ResponseEntity<Void> unlinkCurrentUserIdentity(@PathVariable UUID identityUuid) {
+    public ResponseEntity<Void> unlinkCurrentUserIdentity(@PathVariable("identityUuid") UUID identityUuid) {
         UUID userUuid = getCurrentUserUseCase.execute().uuid();
         try {
             unlinkIdentityUseCase.execute(userUuid, identityUuid);

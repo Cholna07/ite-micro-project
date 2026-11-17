@@ -117,8 +117,30 @@ public class AssignRolesToUserUseCase {
             rolesToAssign.add(role);
         }
 
+        boolean assignsAdmin = rolesToAssign.stream().anyMatch(role -> "ADMIN".equalsIgnoreCase(role.getName().value()));
+        boolean assignsUser = rolesToAssign.stream().anyMatch(role -> "USER".equalsIgnoreCase(role.getName().value()));
+        if (assignsAdmin && assignsUser) {
+            throw new IllegalArgumentException("USER and ADMIN roles must be assigned to separate accounts");
+        }
+
         // Close out expired rows before inserting replacements. The partial unique
         // index permits only one row with revoked_at IS NULL for each user and role.
+        if (assignsAdmin) {
+            roleRepository.findByName("USER").ifPresent(userRole ->
+                    userRoleRepository.findActiveAssignment(user.getId(), userRole.getId()).ifPresent(assignment -> {
+                        assignment.setRevokedAt(now);
+                        assignment.setRevokedBy(actor);
+                        assignment.setReason("ADMIN role assigned; standard USER role is exclusive");
+                        userRoleRepository.save(assignment);
+                    }));
+        } else if (assignsUser) {
+            boolean alreadyAdmin = roleRepository.findByName("ADMIN")
+                    .map(adminRole -> userRoleRepository.existsActiveAssignment(user.getId(), adminRole.getId()))
+                    .orElse(false);
+            if (alreadyAdmin) {
+                throw new IllegalArgumentException("Revoke the ADMIN role before assigning the USER role");
+            }
+        }
         for (Role role : rolesToAssign) {
             userRoleRepository.revokeExpiredAssignments(user.getId(), role.getId(), now, actor);
         }

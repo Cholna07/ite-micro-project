@@ -53,11 +53,11 @@ public class LoginUserUseCase {
         }
 
         if (!user.enabled()) {
-            throw new IllegalStateException("User account is disabled");
+            throw new AccountUnavailableException("User account is disabled");
         }
 
         if (user.accountLocked()) {
-            throw new IllegalStateException("User account is locked");
+            throw new AccountUnavailableException("User account is locked");
         }
 
         UUID sessionId = UUID.randomUUID();

@@ -121,7 +121,7 @@ public class DynamicClientRegistrationController {
 
     @GetMapping
     public RegistrationDetails getRegisteredClient(
-            @RequestParam String client_id,
+            @RequestParam("client_id") String client_id,
             @RequestHeader(
                     value = HttpHeaders.AUTHORIZATION,
                     required = false

@@ -103,15 +103,15 @@ public class UserController {
     // GET /api/users
     @GetMapping
     public ResponseEntity<PageResponse<UserSummary>> listUsers(
-            @RequestParam(required = false) String keyword,
+            @RequestParam(name = "keyword", required = false) String keyword,
             @RequestParam(required = false) Boolean enabled,
             @RequestParam(required = false) Boolean emailVerified,
             @RequestParam(required = false) Boolean deleted,
             @RequestParam(required = false) Boolean locked,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
-            @RequestParam(defaultValue = "username") String sortBy,
-            @RequestParam(defaultValue = "ASC") String sortDirection
+            @RequestParam(name = "sortBy", defaultValue = "username") String sortBy,
+            @RequestParam(name = "sortDirection", defaultValue = "ASC") String sortDirection
     ) {
         if (page < 0 || size < 1 || size > 100) {
             throw new RestApiException(HttpStatus.BAD_REQUEST, "Page must be non-negative and size must be between 1 and 100");
@@ -315,7 +315,7 @@ public class UserController {
     public ResponseEntity<Void> revokeRole(
             @PathVariable UUID uuid,
             @PathVariable UUID roleUuid,
-            @RequestParam(required = false) String reason
+            @RequestParam(name = "reason", required = false) String reason
     ) {
         revokeRoleFromUserUseCase.execute(uuid, roleUuid, reason);
         return ResponseEntity.noContent().build();
@@ -352,7 +352,7 @@ public class UserController {
     public ResponseEntity<Void> revokePermission(
             @PathVariable UUID uuid,
             @PathVariable UUID permissionUuid,
-            @RequestParam(required = false) String reason
+            @RequestParam(name = "reason", required = false) String reason
     ) {
         revokePermissionFromUserUseCase.execute(uuid, permissionUuid, reason);
         return ResponseEntity.noContent().build();

@@ -52,6 +52,8 @@ public class SecurityConfig {
                                 "/api/auth/register",
                                 "/api/auth/login"
                         ).permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/auth/providers").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/branding").permitAll()
 
                         // DCR GET: controller validates registration access token
                         .requestMatchers(
@@ -69,7 +71,9 @@ public class SecurityConfig {
                         // Administrative OAuth client inventory and configuration.
                         .requestMatchers(HttpMethod.GET, "/api/admin/clients", "/api/admin/clients/**")
                         .hasAuthority("client.read")
-                        .requestMatchers(HttpMethod.POST, "/api/admin/clients", "/api/admin/clients/*/rotate-secret")
+                        .requestMatchers(HttpMethod.POST, "/api/admin/clients")
+                        .hasAuthority("client.manage")
+                        .requestMatchers(HttpMethod.POST, "/api/admin/clients/*/rotate-secret")
                         .hasAuthority("client.manage")
                         .requestMatchers(HttpMethod.PUT, "/api/admin/clients/**")
                         .hasAuthority("client.manage")

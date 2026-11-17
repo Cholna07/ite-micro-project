@@ -19,7 +19,7 @@ class SystemConfigurationRepositoryAdapterTest {
         JdbcDataSource source = new JdbcDataSource();
         source.setURL("jdbc:h2:mem:system-config" + UUID.randomUUID() + ";MODE=PostgreSQL;DB_CLOSE_DELAY=-1");
         jdbc = new JdbcTemplate(source);
-        jdbc.execute("CREATE TABLE iam_system_configuration (config_key VARCHAR(100) PRIMARY KEY, config_value VARCHAR(100) NOT NULL, updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_by VARCHAR(100))");
+        jdbc.execute("CREATE TABLE iam_system_configuration (config_key VARCHAR(100) PRIMARY KEY, config_value TEXT NOT NULL, updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_by VARCHAR(100))");
         repository = new SystemConfigurationRepositoryAdapter(jdbc);
     }
 
@@ -39,7 +39,17 @@ class SystemConfigurationRepositoryAdapterTest {
         repository = new SystemConfigurationRepositoryAdapter(jdbc);
         assertEquals(configured, repository.findCurrent());
         repository.update(new IamSystemConfiguration(true, 10, 6), "administrator-2");
-        assertEquals(3, jdbc.queryForObject("SELECT COUNT(*) FROM iam_system_configuration", Integer.class));
+        assertEquals(4, jdbc.queryForObject("SELECT COUNT(*) FROM iam_system_configuration", Integer.class));
         assertEquals(new IamSystemConfiguration(true, 10, 6), repository.findCurrent());
+    }
+
+    @Test
+    void persistsLogoUrlWithoutChangingSecuritySettings() {
+        IamSystemConfiguration configured = new IamSystemConfiguration(true, 12, 6,
+                "https://assets.example.edu/istad-logo.png");
+
+        repository.update(configured, "administrator");
+
+        assertEquals(configured, repository.findCurrent());
     }
 }

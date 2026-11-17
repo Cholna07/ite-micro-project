@@ -53,7 +53,7 @@ class LoginAccountStatusTest {
         when(loadUser.execute("user")).thenReturn(user);
         when(hasher.matches("password", "hash")).thenReturn(true);
         LoginUserUseCase useCase = new LoginUserUseCase(loadUser, hasher, tokens, sessions);
-        assertThrows(IllegalStateException.class,
+        assertThrows(AccountUnavailableException.class,
                 () -> useCase.execute(new LoginUserCommand("user", "password")));
         verifyNoInteractions(tokens, sessions);
     }

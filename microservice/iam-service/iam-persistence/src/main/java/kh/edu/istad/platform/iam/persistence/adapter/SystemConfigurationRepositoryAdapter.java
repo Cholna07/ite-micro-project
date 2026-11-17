@@ -16,6 +16,7 @@ public class SystemConfigurationRepositoryAdapter implements SystemConfiguration
     private static final String REGISTRATION_ENABLED = "registration.enabled";
     private static final String PASSWORD_MINIMUM_LENGTH = "password.minimum-length";
     private static final String MAX_FAILED_ATTEMPTS = "authentication.max-failed-attempts";
+    private static final String BRAND_LOGO_URL = "branding.logo-url";
     private final JdbcTemplate jdbc;
 
     @Override
@@ -29,7 +30,8 @@ public class SystemConfigurationRepositoryAdapter implements SystemConfiguration
         return new IamSystemConfiguration(
                 parseBoolean(values.get(REGISTRATION_ENABLED), defaults.registrationEnabled()),
                 parseBoundedInteger(values.get(PASSWORD_MINIMUM_LENGTH), 8, 32, defaults.minimumPasswordLength()),
-                parseBoundedInteger(values.get(MAX_FAILED_ATTEMPTS), 3, 10, defaults.maxFailedLoginAttempts()));
+                parseBoundedInteger(values.get(MAX_FAILED_ATTEMPTS), 3, 10, defaults.maxFailedLoginAttempts()),
+                values.getOrDefault(BRAND_LOGO_URL, defaults.logoUrl()));
     }
 
     @Override
@@ -38,6 +40,7 @@ public class SystemConfigurationRepositoryAdapter implements SystemConfiguration
         upsert(REGISTRATION_ENABLED, Boolean.toString(configuration.registrationEnabled()), updatedBy);
         upsert(PASSWORD_MINIMUM_LENGTH, Integer.toString(configuration.minimumPasswordLength()), updatedBy);
         upsert(MAX_FAILED_ATTEMPTS, Integer.toString(configuration.maxFailedLoginAttempts()), updatedBy);
+        upsert(BRAND_LOGO_URL, configuration.logoUrl() == null ? "" : configuration.logoUrl().trim(), updatedBy);
     }
 
     private void upsert(String key, String value, String updatedBy) {

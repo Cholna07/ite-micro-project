@@ -77,14 +77,14 @@ public class RoleController {
     // 2. List roles
     @GetMapping
     public ResponseEntity<PageResponse<RoleResponse>> listRoles(
-            @RequestParam(required = false) String keyword,
+            @RequestParam(name = "keyword", required = false) String keyword,
             @RequestParam(required = false) Boolean active,
             @RequestParam(required = false) Boolean systemRole,
             @RequestParam(required = false) Boolean deleted,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
-            @RequestParam(defaultValue = "name") String sortBy,
-            @RequestParam(defaultValue = "ASC") String sortDirection
+            @RequestParam(name = "sortBy", defaultValue = "name") String sortBy,
+            @RequestParam(name = "sortDirection", defaultValue = "ASC") String sortDirection
     ) {
         RoleFilterQuery query = new RoleFilterQuery(
                 keyword,
@@ -225,7 +225,7 @@ public class RoleController {
     public ResponseEntity<Void> revokePermission(
             @PathVariable UUID uuid,
             @PathVariable UUID permissionUuid,
-            @RequestParam(required = false) String reason
+            @RequestParam(name = "reason", required = false) String reason
     ) {
         revokePermissionFromRoleUseCase.execute(
                 uuid,

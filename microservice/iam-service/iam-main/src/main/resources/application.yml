@@ -16,6 +16,10 @@ iam:
       client-secret: ${IAM_REGISTRATION_CLIENT_SECRET:local-registration-secret}
 
 spring:
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
   messages:
     basename: messages
     encoding: UTF-8
@@ -52,7 +56,7 @@ spring:
               - openid
               - profile
               - email
-            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+            redirect-uri: "${GOOGLE_REDIRECT_URI:http://localhost:9191/login/oauth2/code/google}"
 
           github:
             client-id: ${GITHUB_CLIENT_ID}
@@ -77,6 +81,7 @@ spring:
             client-id: ${TELEGRAM_CLIENT_ID}
             client-secret: ${TELEGRAM_CLIENT_SECRET}
             authorization-grant-type: authorization_code
+            # Telegram requires this callback URI to be allowlisted for the app.
             redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
             scope:
               - openid

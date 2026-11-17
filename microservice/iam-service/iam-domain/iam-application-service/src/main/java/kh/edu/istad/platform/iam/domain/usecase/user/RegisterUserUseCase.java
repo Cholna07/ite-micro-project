@@ -3,15 +3,20 @@ package kh.edu.istad.platform.iam.domain.usecase.user;
 import kh.edu.istad.platform.iam.domain.dto.command.RegisterUserCommand;
 import kh.edu.istad.platform.iam.domain.dto.result.UserResult;
 import kh.edu.istad.platform.iam.domain.entity.User;
+import kh.edu.istad.platform.iam.domain.entity.Role;
+import kh.edu.istad.platform.iam.domain.entity.UserRole;
 import kh.edu.istad.platform.iam.domain.port.out.CurrentActorProvider;
 import kh.edu.istad.platform.iam.domain.port.out.PasswordHasher;
+import kh.edu.istad.platform.iam.domain.port.out.RoleRepository;
 import kh.edu.istad.platform.iam.domain.port.out.UserRepository;
+import kh.edu.istad.platform.iam.domain.port.out.UserRoleRepository;
 import kh.edu.istad.platform.iam.domain.port.out.SystemConfigurationRepository;
 import kh.edu.istad.platform.iam.domain.usecase.config.PasswordPolicy;
 import kh.edu.istad.platform.iam.domain.usecase.config.RegistrationDisabledException;
 import kh.edu.istad.platform.iam.domain.valueobject.Email;
 import kh.edu.istad.platform.iam.domain.valueobject.Username;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -24,21 +29,28 @@ public class RegisterUserUseCase {
     private final CurrentActorProvider currentActorProvider;
     private final PasswordPolicy passwordPolicy;
     private final SystemConfigurationRepository configurationRepository;
+    private final RoleRepository roleRepository;
+    private final UserRoleRepository userRoleRepository;
 
     public RegisterUserUseCase(
             UserRepository userRepository,
             PasswordHasher passwordHasher,
             CurrentActorProvider currentActorProvider,
             PasswordPolicy passwordPolicy,
-            SystemConfigurationRepository configurationRepository
+            SystemConfigurationRepository configurationRepository,
+            RoleRepository roleRepository,
+            UserRoleRepository userRoleRepository
     ) {
         this.userRepository = userRepository;
         this.passwordHasher = passwordHasher;
         this.currentActorProvider = currentActorProvider;
         this.passwordPolicy = passwordPolicy;
         this.configurationRepository = configurationRepository;
+        this.roleRepository = roleRepository;
+        this.userRoleRepository = userRoleRepository;
     }
 
+    @Transactional
     public UserResult execute(RegisterUserCommand command) {
 
         if (command == null) {
@@ -51,12 +63,12 @@ public class RegisterUserUseCase {
 
         // Check duplicate username
         if (userRepository.existsByUsername(command.username())) {
-            throw new IllegalStateException("Username already exists");
+            throw new DuplicateAccountException();
         }
 
         // Check duplicate email
         if (userRepository.existsByEmail(command.email())) {
-            throw new IllegalStateException("Email already exists");
+            throw new DuplicateAccountException();
         }
 
         // Create new user
@@ -91,6 +103,17 @@ public class RegisterUserUseCase {
 
         // Save user
         User savedUser = userRepository.save(user);
+
+        Role defaultRole = roleRepository.findByName("USER")
+                .filter(role -> role.isActive() && !role.isDeleted())
+                .orElseThrow(() -> new IllegalStateException("Default USER role is unavailable"));
+        UserRole assignment = new UserRole();
+        assignment.setUserId(savedUser.getId());
+        assignment.setRoleId(defaultRole.getId());
+        assignment.setAssignedAt(now);
+        assignment.setAssignedBy("SYSTEM");
+        assignment.setReason("Default role assigned during local registration");
+        userRoleRepository.save(assignment);
 
         // Return result
         return new UserResult(

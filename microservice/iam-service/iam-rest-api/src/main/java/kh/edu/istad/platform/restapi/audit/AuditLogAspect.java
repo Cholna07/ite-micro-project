@@ -7,6 +7,8 @@ import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.reflect.MethodSignature;
+import org.springframework.aop.support.AopUtils;
+import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.core.Authentication;
@@ -29,8 +31,10 @@ public class AuditLogAspect {
         this.recordAuditLog = recordAuditLog;
     }
 
-    @Around("@annotation(auditAction)")
-    public Object audit(ProceedingJoinPoint invocation, AuditAction auditAction) throws Throwable {
+    @Around("@annotation(kh.edu.istad.platform.iam.domain.audit.AuditAction)")
+    public Object audit(ProceedingJoinPoint invocation) throws Throwable {
+        AuditAction auditAction = findAuditAction(invocation);
+        if (auditAction == null) return invocation.proceed();
         if (!isAuthenticatedAdministrativeRequest()) return invocation.proceed();
         Object result;
         try {
@@ -45,6 +49,16 @@ public class AuditLogAspect {
         String targetId = resolveTarget(invocation, auditAction, result);
         recordSafely(auditAction, targetId, AuditLogOutcome.SUCCESS, null, resolveDetails(auditAction, result));
         return result;
+    }
+
+    private AuditAction findAuditAction(ProceedingJoinPoint invocation) {
+        Method signatureMethod = ((MethodSignature) invocation.getSignature()).getMethod();
+        Class<?> targetClass = AopUtils.getTargetClass(invocation.getTarget());
+        Method targetMethod = AopUtils.getMostSpecificMethod(signatureMethod, targetClass);
+        AuditAction auditAction = AnnotatedElementUtils.findMergedAnnotation(targetMethod, AuditAction.class);
+        return auditAction != null
+                ? auditAction
+                : AnnotatedElementUtils.findMergedAnnotation(signatureMethod, AuditAction.class);
     }
 
     private String resolveDetails(AuditAction annotation, Object result) {

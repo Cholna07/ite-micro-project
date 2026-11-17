@@ -67,16 +67,16 @@ public class PermissionController {
     // 2. List permissions
     @GetMapping
     public ResponseEntity<PageResponse<PermissionResponse>> listPermissions(
-            @RequestParam(required = false) String keyword,
-            @RequestParam(required = false) String resource,
-            @RequestParam(required = false) String action,
+            @RequestParam(name = "keyword", required = false) String keyword,
+            @RequestParam(name = "resource", required = false) String resource,
+            @RequestParam(name = "action", required = false) String action,
             @RequestParam(required = false) Boolean active,
             @RequestParam(required = false) Boolean systemPermission,
             @RequestParam(required = false) Boolean deleted,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
-            @RequestParam(defaultValue = "name") String sortBy,
-            @RequestParam(defaultValue = "ASC") String sortDirection
+            @RequestParam(name = "sortBy", defaultValue = "name") String sortBy,
+            @RequestParam(name = "sortDirection", defaultValue = "ASC") String sortDirection
     ) {
         PermissionFilterQuery query = new PermissionFilterQuery(
                 keyword,

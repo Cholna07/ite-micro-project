@@ -23,17 +23,17 @@ public class OAuthClientManagementController {
 
     @GetMapping
     public OAuthClientManagementService.ClientPage list(
-            @RequestParam(required = false) String keyword,
+            @RequestParam(name = "keyword", required = false) String keyword,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
-            @RequestParam(defaultValue = "clientName") String sortBy,
-            @RequestParam(defaultValue = "ASC") String sortDirection
+            @RequestParam(name = "sortBy", defaultValue = "clientName") String sortBy,
+            @RequestParam(name = "sortDirection", defaultValue = "ASC") String sortDirection
     ) {
         return execute(() -> clients.list(keyword, page, size, sortBy, sortDirection));
     }
 
     @GetMapping("/{clientId}")
-    public OAuthClientManagementService.ClientDetails get(@PathVariable String clientId) {
+    public OAuthClientManagementService.ClientDetails get(@PathVariable("clientId") String clientId) {
         return execute(() -> clients.get(clientId));
     }
 
@@ -47,7 +47,7 @@ public class OAuthClientManagementController {
 
     @PutMapping("/{clientId}")
     public OAuthClientManagementService.ClientDetails update(
-            @PathVariable String clientId,
+            @PathVariable("clientId") String clientId,
             @Valid @RequestBody ClientConfigurationRequest request
     ) {
         return execute(() -> clients.update(clientId, request.toConfiguration()));
@@ -55,18 +55,18 @@ public class OAuthClientManagementController {
 
     /** DELETE is a safe deactivation: registered client and consent history remain stored. */
     @DeleteMapping("/{clientId}")
-    public ResponseEntity<Void> deactivate(@PathVariable String clientId) {
+    public ResponseEntity<Void> deactivate(@PathVariable("clientId") String clientId) {
         execute(() -> { clients.deactivate(clientId); return null; });
         return ResponseEntity.noContent().build();
     }
 
     @PutMapping("/{clientId}/activate")
-    public OAuthClientManagementService.ClientDetails activate(@PathVariable String clientId) {
+    public OAuthClientManagementService.ClientDetails activate(@PathVariable("clientId") String clientId) {
         return execute(() -> clients.activate(clientId));
     }
 
     @PostMapping("/{clientId}/rotate-secret")
-    public OAuthClientManagementService.CreatedClient rotateSecret(@PathVariable String clientId) {
+    public OAuthClientManagementService.CreatedClient rotateSecret(@PathVariable("clientId") String clientId) {
         return execute(() -> clients.rotateSecret(clientId));
     }
 

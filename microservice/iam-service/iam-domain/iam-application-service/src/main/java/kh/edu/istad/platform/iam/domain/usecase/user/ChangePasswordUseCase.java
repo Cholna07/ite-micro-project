@@ -53,7 +53,7 @@ public class ChangePasswordUseCase {
                         new IllegalArgumentException("User not found: " + command.userUuid()));
 
         if (!passwordHasher.matches(command.currentPassword(), user.getPasswordHash())) {
-            throw new IllegalArgumentException("Current password is incorrect");
+            throw new CurrentPasswordIncorrectException();
         }
 
         user.setPasswordHash(passwordHasher.hash(command.newPassword()));

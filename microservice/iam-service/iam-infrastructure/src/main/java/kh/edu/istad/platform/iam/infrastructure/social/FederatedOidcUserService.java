@@ -12,6 +12,8 @@ import org.springframework.security.oauth2.client.oidc.userinfo.OidcUserService;
 import org.springframework.security.oauth2.client.oidc.userinfo.OidcUserRequest;
 import org.springframework.security.oauth2.core.oidc.user.DefaultOidcUser;
 import org.springframework.security.oauth2.core.oidc.user.OidcUser;
+import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
+import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -114,7 +116,13 @@ public class FederatedOidcUserService extends OidcUserService {
 
         UUID pendingLinkUserUuid = IdentityLinkRequestContext.pendingUserUuid();
         if (pendingLinkUserUuid != null) {
-            linkIdentityUseCase.execute(pendingLinkUserUuid, command);
+            try {
+                linkIdentityUseCase.execute(pendingLinkUserUuid, command);
+            } catch (RuntimeException exception) {
+                throw new OAuth2AuthenticationException(
+                        new OAuth2Error("identity_link_failed", "Social identity could not be linked", null),
+                        exception);
+            }
             String localUsername = userRepository.findByUuid(pendingLinkUserUuid)
                     .orElseThrow(() -> new IllegalStateException("Linking account is unavailable"))
                     .getUsername().value();

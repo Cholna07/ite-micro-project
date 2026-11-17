@@ -1,6 +1,7 @@
 package kh.edu.istad.platform.restapi.controller;
 
 import kh.edu.istad.platform.iam.domain.dto.command.UpdateUserProfileCommand;
+import kh.edu.istad.platform.iam.domain.dto.command.ChangePasswordCommand;
 import kh.edu.istad.platform.iam.domain.dto.result.UserResult;
 import kh.edu.istad.platform.iam.domain.dto.result.PageResult;
 import kh.edu.istad.platform.iam.domain.entity.AccountActivityEvent;
@@ -13,7 +14,9 @@ import kh.edu.istad.platform.iam.domain.usecase.user.GetCurrentUserUseCase;
 import kh.edu.istad.platform.iam.domain.usecase.user.ListLoginHistoryUseCase;
 import kh.edu.istad.platform.iam.domain.usecase.user.ListAccountActivityUseCase;
 import kh.edu.istad.platform.iam.domain.usecase.user.UpdateUserProfileUseCase;
+import kh.edu.istad.platform.restapi.service.ManageCurrentProfilePictureUseCase;
 import kh.edu.istad.platform.restapi.dto.request.UpdateUserProfileRequest;
+import kh.edu.istad.platform.restapi.dto.request.ChangePasswordRequest;
 import kh.edu.istad.platform.restapi.exception.RestApiException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,6 +43,7 @@ class MeControllerProfileUpdateTest {
     @Mock ChangePasswordUseCase changePassword;
     @Mock ListLoginHistoryUseCase loginHistory;
     @Mock ListAccountActivityUseCase activity;
+    @Mock ManageCurrentProfilePictureUseCase manageProfilePicture;
     @InjectMocks MeController controller;
 
     @Test
@@ -68,6 +72,32 @@ class MeControllerProfileUpdateTest {
 
         assertEquals(HttpStatus.CONFLICT, exception.getStatus());
         assertEquals("Email is already in use", exception.getMessage());
+    }
+
+    @Test
+    void passwordChangeUsesOnlyTheAuthenticatedUserAndPassesAllPasswordValues() {
+        UUID authenticatedUserUuid = UUID.randomUUID();
+        when(currentUser.execute()).thenReturn(userResult(authenticatedUserUuid));
+
+        var response = controller.changeCurrentPassword(new ChangePasswordRequest(
+                "current-secret", "new-secret-long", "new-secret-long"));
+
+        assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
+        ArgumentCaptor<ChangePasswordCommand> command = ArgumentCaptor.forClass(ChangePasswordCommand.class);
+        verify(changePassword).execute(command.capture());
+        assertEquals(authenticatedUserUuid, command.getValue().userUuid());
+        assertEquals("current-secret", command.getValue().currentPassword());
+        assertEquals("new-secret-long", command.getValue().newPassword());
+    }
+
+    @Test
+    void mismatchedPasswordConfirmationDoesNotCallTheChangeUseCase() {
+        RestApiException exception = assertThrows(RestApiException.class,
+                () -> controller.changeCurrentPassword(new ChangePasswordRequest(
+                        "current-secret", "new-secret-long", "different-secret")));
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatus());
+        verifyNoInteractions(currentUser, changePassword);
     }
 
     @Test

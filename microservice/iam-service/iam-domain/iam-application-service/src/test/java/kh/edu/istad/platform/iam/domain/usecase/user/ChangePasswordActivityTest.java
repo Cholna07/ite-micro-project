@@ -17,6 +17,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -41,6 +42,10 @@ class ChangePasswordActivityTest {
         new ChangePasswordUseCase(users, passwordHasher, actor, activity, passwordPolicy)
                 .execute(new ChangePasswordCommand(userUuid, "old", "new"));
 
+        verify(passwordPolicy).validate("new");
+        verify(passwordHasher).matches("old", "old-hash");
+        verify(passwordHasher).hash("new");
+        assertEquals("new-hash", user.getPasswordHash());
         verify(users).save(user);
         verify(activity).execute(userUuid, AccountActivityEventType.PASSWORD_CHANGED, "Password changed");
     }
@@ -51,11 +56,26 @@ class ChangePasswordActivityTest {
         when(users.findByUuid(userUuid)).thenReturn(Optional.of(user(userUuid)));
         when(passwordHasher.matches("wrong", "old-hash")).thenReturn(false);
 
-        assertThrows(IllegalArgumentException.class, () -> new ChangePasswordUseCase(users, passwordHasher, actor, activity, passwordPolicy)
+        assertThrows(CurrentPasswordIncorrectException.class, () -> new ChangePasswordUseCase(users, passwordHasher, actor, activity, passwordPolicy)
                 .execute(new ChangePasswordCommand(userUuid, "wrong", "new")));
 
+        verify(passwordHasher, never()).hash(anyString());
         verify(users, never()).save(any());
         verifyNoInteractions(activity);
+    }
+
+    @Test
+    void weakNewPasswordDoesNotReadOrUpdateTheAccount() {
+        UUID userUuid = UUID.randomUUID();
+        doThrow(new kh.edu.istad.platform.iam.domain.usecase.config.PasswordPolicyViolationException(
+                12, 100, false, "Password must contain at least 12 characters"))
+                .when(passwordPolicy).validate("short");
+
+        assertThrows(kh.edu.istad.platform.iam.domain.usecase.config.PasswordPolicyViolationException.class,
+                () -> new ChangePasswordUseCase(users, passwordHasher, actor, activity, passwordPolicy)
+                        .execute(new ChangePasswordCommand(userUuid, "old", "short")));
+
+        verifyNoInteractions(users, passwordHasher, actor, activity);
     }
 
     private User user(UUID uuid) {
