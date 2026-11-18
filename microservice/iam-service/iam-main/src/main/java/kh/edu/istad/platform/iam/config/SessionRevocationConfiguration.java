@@ -9,22 +9,24 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.web.context.SecurityContextHolderFilter;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 
 @Configuration
 public class SessionRevocationConfiguration {
     @Bean("sessionRevocationFilter")
-    SessionRevocationFilter sessionRevocationFilter(UserSessionRepository sessions, UserRepository users) {
-        return new SessionRevocationFilter(sessions, users);
+    SessionRevocationFilter sessionRevocationFilter(UserSessionRepository sessions, UserRepository users,
+            @Value("${iam.browser-session.absolute-timeout:8h}") Duration absoluteTimeout) {
+        return new SessionRevocationFilter(sessions, users, absoluteTimeout);
     }
 
     @Bean
@@ -38,10 +40,12 @@ public class SessionRevocationConfiguration {
     static final class SessionRevocationFilter extends OncePerRequestFilter {
         private final UserSessionRepository sessions;
         private final UserRepository users;
+        private final Duration absoluteTimeout;
 
-        SessionRevocationFilter(UserSessionRepository sessions, UserRepository users) {
+        SessionRevocationFilter(UserSessionRepository sessions, UserRepository users, Duration absoluteTimeout) {
             this.sessions = sessions;
             this.users = users;
+            this.absoluteTimeout = absoluteTimeout;
         }
 
         @Override
@@ -68,22 +72,25 @@ public class SessionRevocationConfiguration {
                 UUID authenticatedUser = resolveUserUuid(authentication.getName(), stored);
                 boolean accountEnabled = stored != null && users.findByUuid(stored.userUuid())
                         .filter(user -> user.isEnabled() && !user.isDeleted() && user.isAccountNonLocked()).isPresent();
-                if (stored == null || !stored.isActiveAt(Instant.now())
+                Instant now = Instant.now();
+                if (stored == null || !stored.isActiveAt(now)
+                        || !now.isBefore(stored.createdAt().plus(absoluteTimeout))
                         || authenticatedUser == null || !stored.userUuid().equals(authenticatedUser)
                         || !accountEnabled
                         || stored.credentialType() != kh.edu.istad.platform.iam.domain.entity.SessionCredentialType.HTTP_SESSION) {
                     reject(request, response, httpSession);
                     return;
                 }
-                Instant now = Instant.now();
                 int interval = httpSession.getMaxInactiveInterval();
-                Instant expiry = interval <= 0 ? null : now.plusSeconds(interval);
+                Instant maximumExpiry = stored.createdAt().plus(absoluteTimeout);
+                Instant idleExpiry = interval <= 0 ? maximumExpiry : now.plusSeconds(interval);
+                Instant expiry = idleExpiry.isBefore(maximumExpiry) ? idleExpiry : maximumExpiry;
                 if (!sessions.updateActivity(stored.id(), now, expiry)) {
                     reject(request, response, httpSession);
                     return;
                 }
             } catch (RuntimeException exception) {
-                reject(request, response, httpSession);
+                response.sendError(HttpServletResponse.SC_SERVICE_UNAVAILABLE, "Unable to verify session");
                 return;
             }
             chain.doFilter(request, response);
@@ -109,7 +116,8 @@ public class SessionRevocationConfiguration {
             if (session != null) {
                 try { session.invalidate(); } catch (IllegalStateException ignored) { }
             }
-            if (request.getServletPath().startsWith("/api/") || request.getServletPath().startsWith("/connect/")) {
+            if (request.getServletPath().startsWith("/api/") || request.getServletPath().startsWith("/connect/")
+                    || "XMLHttpRequest".equals(request.getHeader("X-Requested-With"))) {
                 response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Session is no longer active");
             } else {
                 response.sendRedirect(request.getContextPath() + "/login?session-expired");

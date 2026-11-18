@@ -8,6 +8,8 @@ import kh.edu.istad.platform.iam.domain.usecase.user.RegisterBrowserSessionUseCa
 import kh.edu.istad.platform.iam.domain.usecase.user.HttpSessionInventory;
 import kh.edu.istad.platform.iam.domain.usecase.user.RecordAccountActivityEventUseCase;
 import jakarta.servlet.Filter;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,8 +58,12 @@ public class WebSecurityConfig {
                                         new BrowserSessionContext(request.getRemoteAddr(), request.getHeader("User-Agent"),
                                                 "PASSWORD", null, session.getMaxInactiveInterval()));
                                 session.setAttribute(HttpSessionInventory.SESSION_RECORD_ID, inventoryId.toString());
-                                new SavedRequestAwareAuthenticationSuccessHandler()
-                                        .onAuthenticationSuccess(request, response, authentication);
+                                var handler = new SavedRequestAwareAuthenticationSuccessHandler();
+                                if (isConsoleRequest(request)) {
+                                    handler.setRedirectStrategy((req, res, url) ->
+                                            res.setStatus(HttpServletResponse.SC_NO_CONTENT));
+                                }
+                                handler.onAuthenticationSuccess(request, response, authentication);
                             } catch (RuntimeException exception) {
                                 org.springframework.security.core.context.SecurityContextHolder.clearContext();
                                 var session = request.getSession(false);
@@ -68,18 +74,29 @@ public class WebSecurityConfig {
                         .failureHandler((request, response, exception) -> {
                             recordWebLoginSafely(recordLoginEventUseCase, request.getParameter("username"),
                                     request, LoginEventOutcome.FAILURE, "INVALID_CREDENTIALS");
+                            if (isConsoleRequest(request)) {
+                                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                                return;
+                            }
                             new SimpleUrlAuthenticationFailureHandler("/login?flow=oauth&error")
                                     .onAuthenticationFailure(request, response, exception);
                         }).permitAll())
                 .logout(logout -> logout
                         .addLogoutHandler(new InventoryLogoutHandler(userSessionRepository, recordAccountActivityEventUseCase))
-                        .logoutSuccessUrl("/login?logout").permitAll())
+                        .logoutSuccessHandler((request, response, authentication) -> {
+                            if (isConsoleRequest(request)) response.setStatus(HttpServletResponse.SC_NO_CONTENT);
+                            else response.sendRedirect(request.getContextPath() + "/login?logout");
+                        }).permitAll())
                 .csrf(csrf -> csrf
                         .csrfTokenRepository(csrfTokenRepository)
                         .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler()))
                 .addFilterAfter(spaCsrfCookieFilter, CsrfFilter.class);
         http.addFilterAfter(sessionRevocationFilter, SecurityContextHolderFilter.class);
         return http.build();
+    }
+
+    private static boolean isConsoleRequest(HttpServletRequest request) {
+        return "XMLHttpRequest".equals(request.getHeader("X-Requested-With"));
     }
 
     static void recordWebLoginSafely(RecordLoginEventUseCase recorder, String username,

@@ -17,6 +17,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.authority.AuthorityUtils;
 
 import java.time.Instant;
+import java.time.Duration;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -28,7 +29,7 @@ class SessionRevocationFilterTest {
     private final UserSessionRepository sessions = mock(UserSessionRepository.class);
     private final UserRepository users = mock(UserRepository.class);
     private final SessionRevocationConfiguration.SessionRevocationFilter filter =
-            new SessionRevocationConfiguration.SessionRevocationFilter(sessions, users);
+            new SessionRevocationConfiguration.SessionRevocationFilter(sessions, users, Duration.ofHours(8));
 
     @AfterEach void clearContext() { SecurityContextHolder.clearContext(); }
 
@@ -55,6 +56,48 @@ class SessionRevocationFilterTest {
         verify(chain).doFilter(request, response);
         verify(sessions).updateActivity(eq(id), any(), any());
         assertEquals(200, response.getStatus());
+    }
+
+    @Test
+    void rejectsAnActiveSessionPastItsAbsoluteLifetime() throws Exception {
+        UUID id = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        authenticate("alice");
+        MockHttpServletRequest request = request("/api/me");
+        MockHttpSession session = new MockHttpSession();
+        session.setAttribute(HttpSessionInventory.SESSION_RECORD_ID, id.toString());
+        request.setSession(session);
+        User alice = user(userId);
+        when(users.findByUsernameOrEmail("alice")).thenReturn(Optional.of(alice));
+        when(users.findByUuid(userId)).thenReturn(Optional.of(alice));
+        Instant now = Instant.now();
+        when(sessions.findById(id)).thenReturn(Optional.of(new UserSession(id, userId,
+                SessionCredentialType.HTTP_SESSION, "PASSWORD", null, now.minus(Duration.ofHours(9)),
+                now.minusSeconds(1), now.plusSeconds(500), null, null, null, null, null)));
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, mock(FilterChain.class));
+
+        assertEquals(401, response.getStatus());
+        assertTrue(session.isInvalid());
+        verify(sessions, never()).updateActivity(any(), any(), any());
+    }
+
+    @Test
+    void preservesTheSessionWhenTheInventoryIsUnavailable() throws Exception {
+        UUID id = UUID.randomUUID();
+        authenticate("alice");
+        MockHttpServletRequest request = request("/api/me");
+        MockHttpSession session = new MockHttpSession();
+        session.setAttribute(HttpSessionInventory.SESSION_RECORD_ID, id.toString());
+        request.setSession(session);
+        when(sessions.findById(id)).thenThrow(new IllegalStateException("Inventory unavailable"));
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, mock(FilterChain.class));
+
+        assertEquals(503, response.getStatus());
+        assertFalse(session.isInvalid());
     }
 
     @Test

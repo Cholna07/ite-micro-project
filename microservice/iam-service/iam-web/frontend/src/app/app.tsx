@@ -10,8 +10,7 @@ import { FaFacebookF, FaGithub, FaGoogle, FaTelegramPlane } from "react-icons/fa
 import { FiMonitor, FiMapPin, FiClock } from "react-icons/fi";
 import { Button } from "@/components/ui/button";
 import { AppLayout } from "@/components/layouts/app-layout";
-import { apiClient, clearAccessToken, getAccessPermissions, hasAccessToken, storeAccessPermissions, storeAccessToken } from "@/lib/api-client";
-import { notifyToast } from "@/app/providers";
+import { apiClient } from "@/lib/api-client";
 
 type Locale = "en" | "km";
 type Me = { uuid: string; username: string; email?: string; givenName?: string; familyName?: string; middleName?: string; nickname?: string; gender?: string; phoneNumber?: string; pictureUrl?: string; enabled: boolean; locked: boolean; createdAt?: string; updatedAt?: string };
@@ -76,61 +75,98 @@ function useLocale(): [Locale, (locale: Locale) => void] {
 export function App() {
   const [locale, setLocale] = useLocale();
   const t = (key: keyof typeof copy.en) => copy[locale][key] ?? key;
-  const [loggedIn, setLoggedIn] = useState(hasAccessToken);
-  const [accessPermissions, setAccessPermissions] = useState(getAccessPermissions);
-  const hasAdminAccess = accessPermissions.some(permission => ["user.read", "role.read", "permission.read", "client.read", "client.create", "client.manage", "session.read", "audit.read", "system.config.read"].includes(permission));
   const queryClient = useQueryClient();
   const location = useLocation();
   const navigate = useNavigate();
   const branding = useQuery({ queryKey: ["branding"], queryFn: async () => (await apiClient.get<Branding>("/branding")).data, staleTime: 60_000 });
   const publicRoute = location.pathname === "/login" || location.pathname === "/register";
-  const me = useQuery({ queryKey: ["me"], queryFn: async () => {
-    const response = await apiClient.get<Me>("/me");
-    const header = response.headers["x-iam-permissions"];
-    if (typeof header === "string") {
-      const permissions = header.split(",").filter(Boolean);
-      storeAccessPermissions(permissions);
-      setAccessPermissions(permissions);
-    }
-    return response.data;
-  }, enabled: loggedIn || !publicRoute, retry: false });
-  useEffect(() => { if (me.data) setLoggedIn(true); }, [me.data]);
-  useEffect(() => { if (loggedIn && me.isError && (me.error as AxiosError)?.response?.status === 401) { clearAccessToken(); setLoggedIn(false); } }, [loggedIn, me.isError, me.error]);
-
-  const login = useMutation({ mutationFn: async (values: { usernameOrEmail: string; password: string }) => (await apiClient.post<{ accessToken: string; permissions?: string[] }>("/auth/login", values)).data, onSuccess: ({ accessToken, permissions = [] }) => { storeAccessToken(accessToken); storeAccessPermissions(permissions); setAccessPermissions(permissions); setLoggedIn(true); queryClient.invalidateQueries(); const from = (location.state as { from?: { pathname?: string; search?: string } } | null)?.from; navigate(from?.pathname ? `${from.pathname}${from.search ?? ""}` : "/", { replace: true }); } });
-  if (!loggedIn && me.isLoading) return <div className="grid min-h-screen place-items-center bg-[#F8FAFC] text-sm text-slate-500">{t("loading")}</div>;
-  if (!loggedIn) return <Routes>
+  const oauthLogin = location.pathname === "/login" && new URLSearchParams(location.search).get("flow") === "oauth";
+  const me = useQuery({
+    queryKey: ["me"],
+    queryFn: async ({ signal }) => {
+      const response = await apiClient.get<Me>("/me", { signal });
+      const permissions = response.headers["x-iam-permissions"];
+      return { user: response.data, permissions: typeof permissions === "string" ? permissions.split(",").filter(Boolean) : [] };
+    },
+    retry: false,
+    refetchOnWindowFocus: true,
+  });
+  const status = axios.isAxiosError(me.error) ? me.error.response?.status : undefined;
+  const from = (location.state as { from?: { pathname: string; search: string; hash: string } } | null)?.from;
+  const returnPath = from ? from.pathname + from.search + from.hash : "/";
+  const login = useMutation({
+    mutationFn: async ({ usernameOrEmail, password }: { usernameOrEmail: string; password: string }) => {
+      if (!readCookie("XSRF-TOKEN")) await apiClient.get("/branding");
+      try {
+        await apiClient.post("/login", new URLSearchParams({ username: usernameOrEmail, password }), {
+          baseURL: "",
+          headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "XMLHttpRequest" },
+        });
+      } catch (error) {
+        if (axios.isAxiosError(error) && error.response?.status === 401) {
+          throw new Error(locale === "km" ? "ឈ្មោះអ្នកប្រើ ឬពាក្យសម្ងាត់មិនត្រឹមត្រូវទេ។" : "The username or password was not accepted.");
+        }
+        throw error;
+      }
+    },
+    onSuccess: async () => {
+      await queryClient.cancelQueries();
+      queryClient.removeQueries({ predicate: query => query.queryKey[0] !== "me" && query.queryKey[0] !== "branding" });
+      const session = await me.refetch();
+      if (session.isError && axios.isAxiosError(session.error) && session.error.response?.status === 401) {
+        throw new Error(t("error"));
+      }
+    },
+  });
+  if (me.isPending) return <div className="grid min-h-screen place-items-center bg-[#F8FAFC] text-sm text-slate-500">{t("loading")}</div>;
+  if (me.isError && status !== 401 && !oauthLogin) return <main className="grid min-h-screen place-items-center bg-[#F8FAFC] p-6">
+    <section className="rounded-xl border bg-white p-6 text-center">
+      <p role="alert">{t("loadingError")}</p>
+      <Button className="mt-4" onClick={() => void me.refetch()} disabled={me.isFetching}>{t("refresh")}</Button>
+    </section>
+  </main>;
+  if (!me.data || status === 401 || oauthLogin) return <Routes>
     <Route path="/register" element={<Register locale={locale} logoUrl={branding.data?.logoUrl} onLocale={setLocale} onRegistered={() => navigate("/login?registered=1")} />} />
-    <Route path="/login" element={<Login locale={locale} logoUrl={branding.data?.logoUrl} t={t} onLocale={setLocale} onSubmit={(values) => login.mutate(values)} busy={login.isPending} error={login.error ? apiErrorMessage(login.error, t("error")) : ""} />} />
+    <Route path="/login" element={<Login locale={locale} logoUrl={branding.data?.logoUrl} t={t} onLocale={setLocale} onSubmit={login.mutate} busy={login.isPending} error={login.error ? apiErrorMessage(login.error, t("error")) : ""} />} />
     <Route path="*" element={<Navigate to="/login" replace state={{ from: location }} />} />
   </Routes>;
-  if (me.isLoading) return <div className="grid min-h-screen place-items-center bg-[#F8FAFC] text-sm text-slate-500">{t("loading")}</div>;
-  if (!me.data) return <main className="grid min-h-screen place-items-center bg-[#F8FAFC] p-6"><section className="max-w-md rounded-xl border bg-white p-7 text-center"><FiLock className="mx-auto text-[#534AB7]" size={24}/><h1 className="mt-3 font-semibold">{t("noAdmin")}</h1><button className="mt-5 text-sm text-rose-600" onClick={() => { clearAccessToken(); setLoggedIn(false); }}> {t("logout")}</button></section></main>;
+  if (publicRoute) return <Navigate to={returnPath} replace />;
+  const accessPermissions = me.data.permissions;
+  const hasAdminAccess = accessPermissions.some(permission => ["user.read", "role.read", "permission.read", "client.read", "client.create", "client.manage", "session.read", "audit.read", "system.config.read"].includes(permission));
 
   const langCopy = copy[locale];
-  const shellConfig: ShellConfig = { locale, csrfToken: "", csrfParameter: "_csrf", user: { username: me.data.username, email: me.data.email ?? "", givenName: me.data.givenName ?? "", familyName: me.data.familyName ?? "", pictureUrl: me.data.pictureUrl ?? "" }, permissions: accessPermissions, messages: { "dashboard.overview": langCopy.overview, "dashboard.closeMenu": locale === "km" ? "បិទម៉ឺនុយ" : "Close menu", "dashboard.menu": locale === "km" ? "ម៉ឺនុយ" : "Menu", "dashboard.expandSidebar": locale === "km" ? "ពង្រីករបារចំហៀង" : "Expand sidebar", "dashboard.collapseSidebar": locale === "km" ? "បង្រួមរបារចំហៀង" : "Collapse sidebar", "dashboard.identityWorkspace": locale === "km" ? "កន្លែងធ្វើការអត្តសញ្ញាណ" : "Identity workspace", "dashboard.linkedAccounts": langCopy.linked, "dashboard.connectedApplications": langCopy.apps, "common.language": langCopy.language, "common.logout": langCopy.logout, "profile.edit": langCopy.editProfile, "profile.changePassword": langCopy.password } };
+  const shellConfig: ShellConfig = { locale, csrfToken: "", csrfParameter: "_csrf", user: { username: me.data.user.username, email: me.data.user.email ?? "", givenName: me.data.user.givenName ?? "", familyName: me.data.user.familyName ?? "", pictureUrl: me.data.user.pictureUrl ?? "" }, permissions: accessPermissions, messages: { "dashboard.overview": langCopy.overview, "dashboard.closeMenu": locale === "km" ? "បិទម៉ឺនុយ" : "Close menu", "dashboard.menu": locale === "km" ? "ម៉ឺនុយ" : "Menu", "dashboard.expandSidebar": locale === "km" ? "ពង្រីករបារចំហៀង" : "Expand sidebar", "dashboard.collapseSidebar": locale === "km" ? "បង្រួមរបារចំហៀង" : "Collapse sidebar", "dashboard.identityWorkspace": locale === "km" ? "កន្លែងធ្វើការអត្តសញ្ញាណ" : "Identity workspace", "dashboard.linkedAccounts": langCopy.linked, "dashboard.connectedApplications": langCopy.apps, "common.language": langCopy.language, "common.logout": langCopy.logout, "profile.edit": langCopy.editProfile, "profile.changePassword": langCopy.password } };
   const logout = async () => {
-    try { await apiClient.delete("/me/sessions/current"); } catch { /* Continue local and servlet logout when no inventory-backed session is available. */ }
-    try { await apiClient.post("/logout", {}, { baseURL: "" }); } catch { /* Still clear this browser's credentials if its server session has expired. */ }
-    clearAccessToken(); queryClient.clear(); setLoggedIn(false); navigate("/login?logout=1");
+    try {
+      await apiClient.post("/logout", {}, { baseURL: "", headers: { "X-Requested-With": "XMLHttpRequest" } });
+    } catch (error) {
+      if (!axios.isAxiosError(error) || error.response?.status !== 401) {
+        window.alert(t("error"));
+        return;
+      }
+    }
+    await queryClient.cancelQueries();
+    queryClient.removeQueries({ predicate: query => query.queryKey[0] !== "me" && query.queryKey[0] !== "branding" });
+    await me.refetch();
+    navigate("/login?logout=1", { replace: true });
   };
   const title = pathTitle(location.pathname, t);
   return <AppLayout config={shellConfig as never} title={title} logoUrl={branding.data?.logoUrl} onLogout={logout}>
     <Routes>
-      <Route path="/" element={hasAdminAccess ? <Overview me={me.data} t={t} permissions={accessPermissions} locale={locale} /> : <Navigate to="/account/profile" replace />} />
+      <Route path="/" element={hasAdminAccess ? <Overview me={me.data.user} t={t} permissions={accessPermissions} locale={locale} /> : <Navigate to="/account/profile" replace />} />
       <Route path="/users" element={<UsersPage t={t} canRead={accessPermissions.includes("user.read")} canManage={accessPermissions.includes("user.manage")} />} />
       <Route path="/users/:uuid" element={<UserDetail t={t} locale={locale} canRead={accessPermissions.includes("user.read")} canManage={accessPermissions.includes("user.manage")} canAssignRoles={accessPermissions.includes("user.role.assign")} canReadRoles={accessPermissions.includes("role.read")} canAssignPermissions={accessPermissions.includes("user.permission.assign")} canReadPermissions={accessPermissions.includes("permission.read")} />} />
       <Route path="/roles" element={<RolesPage t={t} canRead={accessPermissions.includes("role.read")} canManage={accessPermissions.includes("role.manage")} />} />
       <Route path="/roles/:uuid" element={<RoleDetail t={t} canRead={accessPermissions.includes("role.read")} canAssignPermissions={accessPermissions.includes("role.permission.assign")} canReadPermissions={accessPermissions.includes("permission.read")} />} />
       <Route path="/permissions" element={<PermissionsPage t={t} locale={locale} canRead={accessPermissions.includes("permission.read")} canManage={accessPermissions.includes("permission.manage")} />} />
-      <Route path="/account/profile" element={<AccountProfile me={me.data} locale={locale} />} />
+      <Route path="/account/profile" element={<AccountProfile me={me.data.user} locale={locale} />} />
       <Route path="/account/password" element={<PasswordPage locale={locale} />} />
       <Route path="/account/linked" element={<LinkedAccountsPage locale={locale} />} />
       <Route path="/account/apps" element={<ConnectedApplicationsPage locale={locale} />} />
       <Route path="/account/sessions" element={<AccountSessionsPage locale={locale} onLogout={logout} />} />
       <Route path="/account/history" element={<LoginHistoryPage locale={locale} />} />
       <Route path="/account/activity" element={<AccountActivityPage locale={locale} />} />
-      <Route path="/account/deactivate" element={<AccountDeactivationPage user={me.data} locale={locale} onLogout={logout} />} />
+      <Route path="/account/deactivate" element={<AccountDeactivationPage user={me.data.user} locale={locale} onLogout={logout} />} />
       <Route path="/oauth2/consent" element={<OAuthConsentPage locale={locale} />} />
       <Route path="/profile/edit" element={<Navigate to="/account/profile" replace />} />
       <Route path="/profile/password" element={<Navigate to="/account/password" replace />} />
@@ -142,7 +178,7 @@ export function App() {
       <Route path="/admin/history" element={accessPermissions.includes("user.read") ? <LoginHistoryPage admin locale={locale} /> : <Navigate to="/" replace />} />
       <Route path="/audit-logs" element={accessPermissions.includes("audit.read") ? <AuditLogsPage locale={locale} /> : <Navigate to="/" replace />} />
       <Route path="/system-config" element={accessPermissions.includes("system.config.read") ? <SystemConfigurationPage locale={locale} canManage={accessPermissions.includes("system.config.manage")} /> : <Navigate to="/" replace />} />
-      <Route path="/account/*" element={<UnavailableFeature locale={locale} feature="activity" />} />
+      <Route path="/account/*" element={<Navigate to="/account/activity" replace />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   </AppLayout>;
@@ -282,10 +318,10 @@ function Login({ locale, logoUrl, t, onLocale, onSubmit, busy, error }: { locale
   ];
   return <main className="grid min-h-screen bg-[#F8FAFC] lg:grid-cols-[minmax(380px,0.85fr)_1.15fr]">
     <aside className="hidden flex-col justify-between bg-[#14213D] p-10 text-white lg:flex"><Link className="flex items-center gap-3 text-lg font-semibold tracking-tight" to="/login"><BrandLogo logoUrl={logoUrl}/><span>ISTAD IAM</span></Link><div><p className="text-xs font-semibold uppercase tracking-[.2em] text-indigo-200">{t("welcome")}</p><h1 className="mt-4 max-w-md text-4xl font-semibold leading-tight">{locale === "km" ? "អត្តសញ្ញាណគ្រប់រូប ចូលប្រើបានដោយសុវត្ថិភាព។" : "Secure access for every identity."}</h1><p className="mt-4 max-w-sm text-sm leading-6 text-slate-300">{locale === "km" ? "កន្លែងដែលអាចទុកចិត្តបានសម្រាប់គ្រប់គ្រងអ្នកប្រើ តួនាទី និងសិទ្ធិ។" : "One trusted place to manage users, roles, and permissions."}</p></div><p className="text-xs text-slate-400">ISTAD IAM · {locale === "km" ? "កន្លែងធ្វើការអត្តសញ្ញាណ" : "Identity workspace"}</p></aside>
-    <section className="flex items-center justify-center p-5 sm:p-10"><div className="w-full max-w-md"><div className="mb-8 flex items-center justify-between lg:justify-end"><span className="flex items-center gap-2 font-semibold lg:hidden"><BrandLogo logoUrl={logoUrl}/>ISTAD IAM</span><select aria-label={t("language")} className="rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-sm" value={locale} onChange={(e) => onLocale(e.target.value as Locale)}><option value="en">English</option><option value="km">ខ្មែរ</option></select></div><h2 className="text-2xl font-semibold tracking-tight">{t("login")}</h2><p className="mt-2 text-sm text-slate-500">{t("description")}</p>{statusMessage && <p className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800" role="status">{statusMessage}</p>}<form action={sessionAuth ? "/login" : undefined} method={sessionAuth ? "post" : undefined} className="mt-7 space-y-4" onSubmit={sessionAuth ? () => clearAccessToken() : (e) => { e.preventDefault(); const f = new FormData(e.currentTarget); onSubmit({ usernameOrEmail: String(f.get("usernameOrEmail") ?? ""), password: String(f.get("password") ?? "") }); }}>
+    <section className="flex items-center justify-center p-5 sm:p-10"><div className="w-full max-w-md"><div className="mb-8 flex items-center justify-between lg:justify-end"><span className="flex items-center gap-2 font-semibold lg:hidden"><BrandLogo logoUrl={logoUrl}/>ISTAD IAM</span><select aria-label={t("language")} className="rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-sm" value={locale} onChange={(e) => onLocale(e.target.value as Locale)}><option value="en">English</option><option value="km">ខ្មែរ</option></select></div><h2 className="text-2xl font-semibold tracking-tight">{t("login")}</h2><p className="mt-2 text-sm text-slate-500">{t("description")}</p>{statusMessage && <p className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800" role="status">{statusMessage}</p>}<form action={sessionAuth ? "/login" : undefined} method={sessionAuth ? "post" : undefined} className="mt-7 space-y-4" onSubmit={sessionAuth ? undefined : (e) => { e.preventDefault(); const f = new FormData(e.currentTarget); onSubmit({ usernameOrEmail: String(f.get("usernameOrEmail") ?? ""), password: String(f.get("password") ?? "") }); }}>
       {sessionAuth && <input name="_csrf" type="hidden" value={readCookie("XSRF-TOKEN")} />}
       <Field label={t("username")} name={sessionAuth ? "username" : "usernameOrEmail"} required/><Field label={t("passwordLabel")} name="password" type="password" required/><Button className="h-11 w-full rounded-lg bg-[#534AB7] text-sm font-semibold text-white hover:bg-[#43389B] disabled:opacity-60" disabled={!sessionAuth && busy}>{busy ? t("loading") : t("signIn")}</Button>{(error || sessionLoginError) && <p role="alert" className="text-sm text-rose-700">{error || (locale === "km" ? "ឈ្មោះអ្នកប្រើ ឬពាក្យសម្ងាត់មិនត្រឹមត្រូវទេ។" : "The username or password was not accepted.")}</p>}</form>
-      {enabledProviders.length > 0 ? <div className="mt-6"><p className="mb-3 text-center text-xs text-slate-500">{locale === "km" ? "ឬបន្តដោយប្រើគណនីសង្គម" : "Or continue with a social account"}</p><div className="grid grid-cols-2 gap-2">{providers.filter(provider => enabledProviders.includes(provider.id)).map(provider => <a className="flex h-10 items-center justify-center gap-2 rounded-lg border border-[#E5E7EB] bg-white text-sm font-medium text-slate-700 hover:bg-slate-50" href={`/oauth2/authorization/${provider.id}`} key={provider.id} onClick={() => clearAccessToken()}>{provider.icon}{provider.label}</a>)}</div></div> : <p className="mt-6 text-center text-xs text-slate-500">{locale === "km" ? "មិនមានគណនីសង្គមដែលបានកំណត់រចនាសម្ព័ន្ធទេ។" : "Social sign-in is not configured."}</p>}
+      {enabledProviders.length > 0 ? <div className="mt-6"><p className="mb-3 text-center text-xs text-slate-500">{locale === "km" ? "ឬបន្តដោយប្រើគណនីសង្គម" : "Or continue with a social account"}</p><div className="grid grid-cols-2 gap-2">{providers.filter(provider => enabledProviders.includes(provider.id)).map(provider => <a className="flex h-10 items-center justify-center gap-2 rounded-lg border border-[#E5E7EB] bg-white text-sm font-medium text-slate-700 hover:bg-slate-50" href={`/oauth2/authorization/${provider.id}`} key={provider.id}>{provider.icon}{provider.label}</a>)}</div></div> : <p className="mt-6 text-center text-xs text-slate-500">{locale === "km" ? "មិនមានគណនីសង្គមដែលបានកំណត់រចនាសម្ព័ន្ធទេ។" : "Social sign-in is not configured."}</p>}
       <p className="mt-5 text-center text-xs text-slate-500">{locale === "km" ? "មិនទាន់មានគណនី?" : "New to ISTAD IAM?"} <Link className="font-medium text-[#534AB7] hover:underline" to="/register">{locale === "km" ? "ចុះឈ្មោះ" : "Create an account"}</Link></p></div></section>
   </main>;
 }
@@ -476,19 +512,19 @@ function Metric({ title, value, icon, href, loading, error, denied, deniedLabel,
 function QuickLink({ to, icon, label }: { to: string; icon: React.ReactNode; label: string }) { return <Link className="flex items-center gap-3 px-5 py-4 text-sm font-medium text-slate-700 hover:bg-slate-50" to={to}><span className="text-[#534AB7]">{icon}</span>{label}<FiChevronRight className="ml-auto text-slate-400"/></Link>; }
 
 function DataPage<T extends { uuid: string; name?: string; username?: string; email?: string; enabled: boolean }>({ kind, endpoint, t, locale = "en", canRead = true, canManage = false }: { kind: "users" | "roles" | "permissions"; endpoint: string; t: (key: keyof typeof copy.en) => string; locale?: Locale; canRead?: boolean; canManage?: boolean }) {
-  const [search, setSearch] = useState(""); const [currentPage, setCurrentPage] = useState(0); const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all"); const [modal, setModal] = useState(false); const [selected, setSelected] = useState<T | null>(null); const [viewingPermission, setViewingPermission] = useState<string | null>(null); const [error, setError] = useState("");
+  const [search, setSearch] = useState(""); const [currentPage, setCurrentPage] = useState(0); const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all"); const [modal, setModal] = useState(false); const [selected, setSelected] = useState<T | null>(null); const [viewingPermission, setViewingPermission] = useState<string | null>(null); const [error, setError] = useState(""); const [notice, setNotice] = useState("");
   const queryClient = useQueryClient(); const page = useQuery({ queryKey: [kind, search, currentPage, statusFilter], queryFn: async () => (await apiClient.get<Page<T>>(endpoint, { params: { keyword: search || undefined, ...(kind === "users" ? { enabled: statusFilter === "all" ? undefined : statusFilter === "active" } : { active: statusFilter === "all" ? undefined : statusFilter === "active" }), page: currentPage, size: 20 } })).data, enabled: canRead });
-  const remove = useMutation({ mutationFn: (uuid: string) => apiClient.delete(`${endpoint}/${uuid}`), onSuccess: () => { notifyToast(`${kind === "users" ? "User" : kind === "roles" ? "Role" : "Permission"} deleted successfully.`, "success"); return queryClient.invalidateQueries({ queryKey: [kind] }); }, onError: () => setError(t("error")) });
-  const toggle = useMutation({ mutationFn: ({ uuid, enabled }: { uuid: string; enabled: boolean }) => apiClient.put(`${endpoint}/${uuid}/${kind === "users" ? (enabled ? "disable" : "enable") : (enabled ? "deactivate" : "activate")}`), onSuccess: (_, variables) => { notifyToast(`${kind === "users" ? "User" : kind === "roles" ? "Role" : "Permission"} ${variables.enabled ? "disabled" : "enabled"} successfully.`, "success"); return queryClient.invalidateQueries({ queryKey: [kind] }); }, onError: () => setError(t("error")) });
+  const remove = useMutation({ mutationFn: (uuid: string) => apiClient.delete(`${endpoint}/${uuid}`), onSuccess: () => { setError(""); setNotice(`${kind === "users" ? "User" : kind === "roles" ? "Role" : "Permission"} deleted successfully.`); return queryClient.invalidateQueries({ queryKey: [kind] }); }, onError: () => setError(t("error")) });
+  const toggle = useMutation({ mutationFn: ({ uuid, enabled }: { uuid: string; enabled: boolean }) => apiClient.put(`${endpoint}/${uuid}/${kind === "users" ? (enabled ? "disable" : "enable") : (enabled ? "deactivate" : "activate")}`), onSuccess: (_, variables) => { setError(""); setNotice(`${kind === "users" ? "User" : kind === "roles" ? "Role" : "Permission"} ${variables.enabled ? "disabled" : "enabled"} successfully.`); return queryClient.invalidateQueries({ queryKey: [kind] }); }, onError: () => setError(t("error")) });
   if (!canRead) return <PermissionRequired t={t} permission={kind === "users" ? "user.read" : kind === "roles" ? "role.read" : "permission.read"}/>;
   const title = t(kind); const createTitle = t(kind === "users" ? "createUser" : kind === "roles" ? "createRole" : "createPermission");
   return <section className="space-y-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-xl font-semibold">{title}</h1><p className="mt-1 text-sm text-slate-500">{page.data?.page?.totalElements ?? "—"} {title.toLowerCase()}</p></div>{canManage && <button onClick={() => { setSelected(null); setError(""); setModal(true); }} className="inline-flex h-9 items-center gap-2 rounded-lg bg-[#534AB7] px-3.5 text-sm font-medium text-white hover:bg-[#43389B]"><FiPlus/>{t("create")}</button>}</div>
   <div className="flex flex-wrap gap-2"><div className="relative min-w-[200px] max-w-sm flex-1"><FiSearch className="absolute left-3 top-2.5 text-slate-400"/><input className="h-9 w-full rounded-lg border border-[#E5E7EB] pl-9 pr-3 text-sm" placeholder={t("search")} value={search} onChange={e => { setSearch(e.target.value); setCurrentPage(0); }}/></div><select aria-label={localeField("Filter by status", "ត្រងតាមស្ថានភាព")} className="h-9 rounded-lg border border-[#E5E7EB] bg-white px-3 text-sm text-slate-700" value={statusFilter} onChange={e => { setStatusFilter(e.target.value as "all" | "active" | "inactive"); setCurrentPage(0); }}><option value="all">{localeField("All statuses", "គ្រប់ស្ថានភាព")}</option><option value="active">{localeField("Active", "សកម្ម")}</option><option value="inactive">{localeField("Inactive", "អសកម្ម")}</option></select><button onClick={() => page.refetch()} className="grid size-9 place-items-center rounded-lg border border-[#E5E7EB] bg-white text-slate-600" title={t("refresh")}><FiRefreshCw/></button></div>
-  {error && <p role="alert" className="rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
+  {error && <p role="alert" className="rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}{notice && <p role="status" className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">{notice}</p>}
   {kind === "roles" && !canManage && <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{localeField("Read-only access. role.manage is required to create, update, activate, deactivate, or delete roles.", "ការចូលប្រើសម្រាប់មើលតែប៉ុណ្ណោះ។ ត្រូវការសិទ្ធិ role.manage ដើម្បីបង្កើត កែប្រែ បើក បិទ ឬលុបតួនាទី។")}</p>}
   <div className="overflow-x-auto rounded-xl border border-[#E5E7EB] bg-white"><table className="w-full min-w-[700px] text-left text-sm"><thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3">{t("name")}</th>{kind === "users" && <th className="px-4 py-3">{t("email")}</th>}{kind === "permissions" && <><th className="px-4 py-3">{t("resource")}</th><th className="px-4 py-3">{t("action")}</th></>}<th className="px-4 py-3">{t("status")}</th><th className="px-4 py-3 text-right">{t("actions")}</th></tr></thead><tbody className="divide-y divide-slate-100">{page.data?.content.map(item => { const label = item.name ?? item.username ?? "—"; const desc = "description" in item ? String(item.description ?? "") : item.uuid; const permission = item as unknown as Permission; const detailTo = kind === "users" ? `/users/${item.uuid}` : `/roles/${item.uuid}`; return <tr key={item.uuid} className="hover:bg-slate-50/70"><td className="px-4 py-3"><div className="font-medium text-slate-900">{kind !== "permissions" ? <Link className="hover:text-[#534AB7]" to={detailTo}>{label}</Link> : label}</div><div className="max-w-[360px] truncate text-xs text-slate-500">{desc}</div></td>{kind === "users" && <td className="px-4 py-3 text-slate-600">{item.email ?? "—"}</td>}{kind === "permissions" && <><td className="px-4 py-3">{permission.resource}</td><td className="px-4 py-3">{permission.action}</td></>}<td className="px-4 py-3"><span className={`rounded-full px-2.5 py-1 text-xs ${item.enabled ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>{item.enabled ? t("active") : t("disabled")}</span></td><td className="px-4 py-3"><div className="flex justify-end gap-1">{kind === "permissions" && <button title={localeField("View details", "មើលព័ត៌មានលម្អិត")} aria-label={localeField("View permission details", "មើលព័ត៌មានលម្អិតសិទ្ធិ")} className="grid size-8 place-items-center rounded-md text-slate-500 hover:bg-indigo-50 hover:text-[#534AB7]" onClick={() => setViewingPermission(item.uuid)}><FiEye/></button>}{canManage && <><button title={item.enabled ? t("disable") : t("enable")} className="grid size-8 place-items-center rounded-md text-slate-500 hover:bg-indigo-50 hover:text-[#534AB7]" onClick={() => toggle.mutate({ uuid: item.uuid, enabled: item.enabled })}><FiCheck/></button>{kind !== "users" && <button title={t("edit")} className="grid size-8 place-items-center rounded-md text-slate-500 hover:bg-slate-100" onClick={() => { setSelected(item); setModal(true); }}><FiEdit2/></button>}<button title={t("delete")} className="grid size-8 place-items-center rounded-md text-slate-500 hover:bg-rose-50 hover:text-rose-700" onClick={() => window.confirm(t("confirmDelete")) && remove.mutate(item.uuid)}><FiTrash2/></button></>}</div></td></tr>; })}</tbody></table>{page.isLoading && <p className="p-8 text-center text-sm text-slate-500">{t("loading")}</p>}{page.isError && <p role="alert" className="p-8 text-center text-sm text-rose-700">{adminLoadError(page.error, kind, locale)}</p>}{page.data?.content.length === 0 && <p className="p-8 text-center text-sm text-slate-500">{t("noResults")}</p>}</div>
   {page.data?.page && page.data.page.totalPages > 1 && <nav aria-label={localeField("Table pages", "ទំព័រតារាង")} className="flex flex-wrap items-center justify-between gap-3"><p className="text-xs text-slate-500">{localeField("Page", "ទំព័រ")} {page.data.page.number + 1} {localeField("of", "ក្នុងចំណោម")} {page.data.page.totalPages}</p><div className="flex gap-2"><button disabled={page.data.page.first || page.isFetching} onClick={() => setCurrentPage(value => Math.max(0, value - 1))} className="h-9 rounded-lg border border-[#E5E7EB] bg-white px-3 text-sm text-slate-700 disabled:cursor-not-allowed disabled:opacity-50">{localeField("Previous", "មុន")}</button><button disabled={page.data.page.last || page.isFetching} onClick={() => setCurrentPage(value => value + 1)} className="h-9 rounded-lg border border-[#E5E7EB] bg-white px-3 text-sm text-slate-700 disabled:cursor-not-allowed disabled:opacity-50">{localeField("Next", "បន្ទាប់")}</button></div></nav>}
-  {modal && <RecordDialog kind={kind} endpoint={endpoint} selected={selected as (Role | Permission | null)} title={selected ? t("edit") : createTitle} t={t} onClose={() => setModal(false)} onSaved={() => { setModal(false); notifyToast(`${kind === "users" ? "User" : kind === "roles" ? "Role" : "Permission"} ${selected ? "updated" : "created"} successfully.`, "success"); void queryClient.invalidateQueries({ queryKey: [kind] }); }} onError={setError}/>} {kind === "permissions" && viewingPermission && <PermissionDetailsDialog uuid={viewingPermission} locale={locale} onClose={() => setViewingPermission(null)}/>}</section>;
+  {modal && <RecordDialog kind={kind} endpoint={endpoint} selected={selected as (Role | Permission | null)} title={selected ? t("edit") : createTitle} t={t} onClose={() => setModal(false)} onSaved={() => { setModal(false); setError(""); setNotice(`${kind === "users" ? "User" : kind === "roles" ? "Role" : "Permission"} ${selected ? "updated" : "created"} successfully.`); void queryClient.invalidateQueries({ queryKey: [kind] }); }} onError={setError}/>} {kind === "permissions" && viewingPermission && <PermissionDetailsDialog uuid={viewingPermission} locale={locale} onClose={() => setViewingPermission(null)}/>}</section>;
 }
 
 function PermissionDetailsDialog({ uuid, locale, onClose }: { uuid: string; locale: Locale; onClose: () => void }) {
@@ -664,7 +700,6 @@ function PasswordPage({ locale }: { locale: Locale }) {
       formRef.current?.reset();
       setClientError(false);
       setMessage(locale === "km" ? "បានប្តូរពាក្យសម្ងាត់។" : "Password changed successfully.");
-      notifyToast("Password changed successfully.", "success");
     },
     onError: (error: unknown) => {
       setClientError(false);
@@ -1025,51 +1060,27 @@ type ConnectedApplication = { id: string; clientId: string; name: string; scopes
 
 function ConnectedApplicationsPage({ locale }: { locale: Locale }) {
   const queryClient = useQueryClient();
+  const [actionError, setActionError] = useState("");
   const query = useQuery({
     queryKey: ["my-connected-applications"],
     queryFn: async () => (await apiClient.get<ConnectedApplication[]>("/me/connected-applications")).data,
   });
   const revoke = useMutation({
     mutationFn: async (id: string) => apiClient.delete(`/me/connected-applications/${encodeURIComponent(id)}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["my-connected-applications"] }),
-    onError: (error) => notifyToast(apiErrorMessage(error, locale === "km" ? "មិនអាចដកសិទ្ធិកម្មវិធីបានទេ។" : "Could not disconnect this application."), "error"),
+    onSuccess: () => { setActionError(""); return queryClient.invalidateQueries({ queryKey: ["my-connected-applications"] }); },
+    onError: (error) => setActionError(apiErrorMessage(error, locale === "km" ? "មិនអាចដកសិទ្ធិកម្មវិធីបានទេ។" : "Could not disconnect this application.")),
   });
   const copy = locale === "km"
     ? { loading: "កំពុងផ្ទុកកម្មវិធីដែលបានភ្ជាប់…", error: "មិនអាចផ្ទុកកម្មវិធីដែលបានភ្ជាប់បានទេ។ សូមព្យាយាមម្តងទៀត។", emptyTitle: "មិនទាន់មានកម្មវិធីដែលបានភ្ជាប់ទេ", empty: "កម្មវិធីដែលអ្នកអនុញ្ញាតនឹងបង្ហាញនៅទីនេះ។", scopes: "សិទ្ធិ", disconnect: "ផ្តាច់", disconnecting: "កំពុងផ្តាច់…", confirm: "ផ្តាច់កម្មវិធីនេះ? វានឹងដកសិទ្ធិ និង token ដែលបានចេញសម្រាប់កម្មវិធីនេះ។", refresh: "ព្យាយាមម្តងទៀត" }
     : { loading: "Loading connected applications…", error: "Unable to load connected applications. Please try again.", emptyTitle: "No connected applications", empty: "Applications you authorize will appear here.", scopes: "Permissions", disconnect: "Disconnect", disconnecting: "Disconnecting…", confirm: "Disconnect this application? This revokes its consent and issued tokens.", refresh: "Try again" };
   return <section className="max-w-4xl space-y-4">
     <header><p className="text-sm text-slate-500">{locale === "km" ? "កម្មវិធី OAuth ដែលអាចចូលប្រើគណនីរបស់អ្នក" : "OAuth applications that can access your account"}</p></header>
+    {actionError && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{actionError}</p>}
     {query.isLoading && <div className="rounded-xl border border-[#E5E7EB] bg-white p-5 text-sm text-slate-500">{copy.loading}</div>}
     {query.isError && <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800"><span>{copy.error} {apiErrorMessage(query.error, "")}</span><button className="rounded-lg border border-rose-300 px-3 py-1.5 font-medium hover:bg-rose-100" onClick={() => void query.refetch()}>{copy.refresh}</button></div>}
     {query.data?.length === 0 && <div className="rounded-xl border border-dashed border-[#CBD5E1] bg-white p-8 text-center"><span className="mx-auto grid size-10 place-items-center rounded-full bg-[#EEECFF] text-[#534AB7]"><FiShield aria-hidden="true"/></span><h2 className="mt-3 text-sm font-semibold">{copy.emptyTitle}</h2><p className="mt-1 text-sm text-slate-500">{copy.empty}</p></div>}
     {!!query.data?.length && <div className="space-y-3">{query.data.map(app => <article key={app.id} className="rounded-xl border border-[#E5E7EB] bg-white p-5"><div className="flex flex-wrap items-start justify-between gap-4"><div className="min-w-0"><h2 className="font-semibold text-slate-900">{app.name}</h2><p className="mt-1 break-all text-xs text-slate-500">{app.clientId}</p>{app.scopes.length > 0 && <div className="mt-4"><p className="text-xs font-medium text-slate-600">{copy.scopes}</p><div className="mt-2 flex flex-wrap gap-2">{app.scopes.map(scope => <span key={scope} className="rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-700">{scope}</span>)}</div></div>}</div><button type="button" disabled={revoke.isPending} onClick={() => { if (window.confirm(copy.confirm)) revoke.mutate(app.id); }} className="h-9 shrink-0 rounded-lg border border-rose-200 px-3 text-sm font-medium text-rose-700 hover:bg-rose-50 disabled:opacity-50">{revoke.isPending && revoke.variables === app.id ? copy.disconnecting : copy.disconnect}</button></div></article>)}</div>}
   </section>;
-}
-
-function UnavailableFeature({ locale, feature, onLogout, user }: { locale: Locale; feature: "linked" | "apps" | "sessions" | "history" | "activity" | "deactivate" | "clients" | "adminSessions" | "adminHistory" | "auditLogs" | "systemConfig"; onLogout?: () => void; user?: Me }) {
-  const labels: Record<Locale, Record<typeof feature, string>> = {
-    en: { linked: "Linked accounts", apps: "Connected applications", sessions: "Active sessions", history: "Login history", activity: "Account activity", deactivate: "Account deactivation", clients: "OAuth2 / OIDC clients", adminSessions: "User session administration", adminHistory: "User login history", auditLogs: "Audit logs", systemConfig: "System configuration" },
-    km: { linked: "គណនីដែលបានភ្ជាប់", apps: "កម្មវិធីដែលបានភ្ជាប់", sessions: "សម័យសកម្ម", history: "ប្រវត្តិចូល", activity: "សកម្មភាពគណនី", deactivate: "ការបិទគណនី", clients: "កម្មវិធី OAuth2 / OIDC", adminSessions: "ការគ្រប់គ្រងសម័យអ្នកប្រើ", adminHistory: "ប្រវត្តិចូលរបស់អ្នកប្រើ", auditLogs: "កំណត់ហេតុសវនកម្ម", systemConfig: "ការកំណត់ប្រព័ន្ធ" },
-  };
-  const sessionPage = feature === "sessions";
-  const sessionExpiry = sessionPage ? readAccessTokenExpiry() : null;
-  const activityPage = feature === "activity";
-  const formatAccountDate = (value?: string) => value ? new Intl.DateTimeFormat(locale === "km" ? "km-KH" : "en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : (locale === "km" ? "មិនមានទិន្នន័យ" : "Not available");
-  return <section className="max-w-3xl rounded-xl border border-[#E5E7EB] bg-white p-6"><p className="text-xs font-semibold uppercase tracking-[.14em] text-[#534AB7]">ISTAD IAM</p><h1 className="mt-2 text-xl font-semibold">{labels[locale][feature]}</h1>{activityPage && <div className="mt-5 rounded-lg border border-[#E5E7EB] p-4"><h2 className="text-sm font-semibold">{locale === "km" ? "ព័ត៌មានពេលវេលាគណនី" : "Account timestamps"}</h2><dl className="mt-3 grid gap-4 sm:grid-cols-2"><div><dt className="text-xs text-slate-500">{locale === "km" ? "បានបង្កើតគណនី" : "Account created"}</dt><dd className="mt-1 text-sm font-medium text-slate-800">{formatAccountDate(user?.createdAt)}</dd></div><div><dt className="text-xs text-slate-500">{locale === "km" ? "កំណត់ត្រាគណនីបានធ្វើបច្ចុប្បន្នភាព" : "Account record last updated"}</dt><dd className="mt-1 text-sm font-medium text-slate-800">{formatAccountDate(user?.updatedAt)}</dd></div></dl><p className="mt-3 text-xs leading-5 text-slate-500">{locale === "km" ? "កាលបរិច្ឆេទទាំងនេះមិនមែនជាកំណត់ហេតុសកម្មភាពទេ។" : "These timestamps are account metadata, not an activity event log."}</p></div>}{sessionPage && <div className="mt-5 rounded-lg border border-[#E5E7EB] p-4"><div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="text-sm font-semibold">{locale === "km" ? "ការចូលប្រើនៅកម្មវិធីរុករកនេះ" : "Sign-in in this browser"}</h2><p className="mt-1 break-all text-xs leading-5 text-slate-500">{navigator.userAgent}</p>{sessionExpiry ? <p className="mt-2 text-xs text-slate-600">{locale === "km" ? "Token ផុតកំណត់៖ " : "Access token expires: "}{new Intl.DateTimeFormat(locale === "km" ? "km-KH" : "en-US", { dateStyle: "medium", timeStyle: "short" }).format(sessionExpiry)}</p> : <p className="mt-2 text-xs text-slate-500">{locale === "km" ? "មិនមានពេលផុតកំណត់ token ដែលអាចអានបានទេ។" : "No readable token expiry is available."}</p>}</div>{onLogout && <button className="h-9 shrink-0 rounded-lg border border-[#E5E7EB] px-3 text-sm font-medium text-slate-700 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700" onClick={onLogout} type="button">{locale === "km" ? "ចាកចេញពីកម្មវិធីរុករកនេះ" : "Sign out this browser"}</button>}</div><p className="mt-3 text-xs leading-5 text-slate-500">{locale === "km" ? "ព័ត៌មាននេះមកពី token ដែលរក្សាទុកក្នុងកម្មវិធីរុករក។ វាមិនមែនជាបញ្ជី session ពីម៉ាស៊ីនមេទេ។" : "This reflects the token held by this browser. It is not a server-side session inventory."}</p></div>}<div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4"><p className="text-sm font-medium text-amber-950">{locale === "km" ? "មិនទាន់មាន API ខាងក្រោយសម្រាប់មុខងារនេះទេ។" : "This feature is not available from the current backend API."}</p><p className="mt-1 text-sm leading-6 text-amber-900/80">{sessionPage ? (locale === "km" ? "ការមើល ឬបញ្ចប់ session នៅឧបករណ៍ផ្សេងទៀត ត្រូវការការគាំទ្រពី API។" : "Listing or terminating sessions on other devices requires backend API support.") : activityPage ? (locale === "km" ? "ប្រវត្តិសកម្មភាពសុវត្ថិភាពត្រូវការកំណត់ហេតុព្រឹត្តិការណ៍ពី backend។" : "Security activity history requires backend event records.") : (locale === "km" ? "ទំព័រនេះមិនបង្ហាញទិន្នន័យក្លែងក្លាយ ឬសកម្មភាពដែលមិនអាចប្រើបានទេ។" : "No sample records or nonfunctional actions are shown here. Add the corresponding backend API before enabling this workflow.")}</p></div></section>;
-}
-
-function readAccessTokenExpiry(): Date | null {
-  try {
-    const token = window.sessionStorage.getItem("northstar.iam.accessToken");
-    const payload = token?.split(".")[1];
-    if (!payload) return null;
-    const base64 = payload.replace(/-/g, "+").replace(/_/g, "/");
-    const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
-    const claims = JSON.parse(atob(padded)) as { exp?: unknown };
-    return typeof claims.exp === "number" && Number.isFinite(claims.exp) ? new Date(claims.exp * 1000) : null;
-  } catch {
-    return null;
-  }
 }
 
 export function AppRouter() { return <BrowserRouter><App/></BrowserRouter>; }

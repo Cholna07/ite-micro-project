@@ -1,4 +1,6 @@
 iam:
+  browser-session:
+    absolute-timeout: ${IAM_BROWSER_SESSION_ABSOLUTE_TIMEOUT:8h}
   bootstrap-admin-username: ${IAM_BOOTSTRAP_ADMIN_USERNAME:}
   security:
     jwt:
@@ -107,3 +109,9 @@ logging:
 server:
   # Keep IAM separate from the other local services; override with IAM_SERVER_PORT when needed.
   port: ${IAM_SERVER_PORT:9191}
+  servlet:
+    session:
+      timeout: ${IAM_BROWSER_SESSION_IDLE_TIMEOUT:30m}
+      cookie:
+        http-only: true
+        same-site: lax
